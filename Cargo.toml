@@ -1,0 +1,9 @@
+[package]
+name = "testing_jig"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ads1x1x = "0.2.2"
+nb = "1.0.0"
+rppal = { version = "0.13.1", features = ["hal"] }
