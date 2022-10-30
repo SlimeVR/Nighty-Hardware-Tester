@@ -13,6 +13,8 @@ use rppal::{
 };
 
 const LSB_SIZE: f32 = 187.5;
+const USB_VENDOR_ID: u16 = 0x1a86;
+const USB_PRODUCT_ID: u16 = 0x7523;
 
 fn reset_esp(pin: &mut OutputPin) -> Result<()> {
     pin.set_low();
@@ -40,7 +42,6 @@ fn flash(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
     enable_flashing(flash_pin, rst_pin)?;
 
     let mut s = process::Command::new("pio")
-        // let mut s = process::Command::new("pwd")
         .arg("run")
         .arg("-t")
         .arg("upload")
@@ -63,6 +64,20 @@ fn read_voltage(
     Ok(value as f32 * LSB_SIZE / 1000000.0)
 }
 
+fn find_usb_device() -> bool {
+    for device in rusb::devices().unwrap().iter() {
+        let device_desc = device.device_descriptor().unwrap();
+
+        if (device_desc.vendor_id() == USB_VENDOR_ID)
+            && (device_desc.product_id() == USB_PRODUCT_ID)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn main() {
     let i2c = I2c::with_bus(1).unwrap();
     let gpio = Gpio::new().unwrap();
@@ -75,6 +90,12 @@ fn main() {
         .unwrap();
     adc.disable_comparator().unwrap();
     adc.set_data_rate(ads1x1x::DataRate16Bit::Sps860).unwrap();
+
+    while !find_usb_device() {
+        println!("Waiting for USB device to be connected...");
+
+        thread::sleep(Duration::from_secs(1));
+    }
 
     let r3v3_voltage = read_voltage(ChannelSelection::SingleA2, &mut adc).unwrap();
     let vcc_voltage = read_voltage(ChannelSelection::SingleA3, &mut adc).unwrap();
