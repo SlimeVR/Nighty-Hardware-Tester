@@ -11,7 +11,7 @@ impl LogCtx {
 
     fn log(&self, level: colored::ColoredString, msg: colored::ColoredString) {
         let stack = if self.stack.len() > 0 {
-            "[".to_string() + &self.stack.join("::") + "]"
+            vec!["[", &self.stack.join("::"), "]"].join("")
         } else {
             "".to_string()
         }
@@ -26,6 +26,8 @@ impl LogCtx {
     }
 
     pub fn leave(&mut self) {
+        // This can runtime-crash
+        // Just don't `leave()` more than you have `enter()` LOL
         let stage = self.stack.pop().unwrap();
         self.log("<--".red(), format!("Leaving stage: {}", stage).white());
     }
