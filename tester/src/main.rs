@@ -16,31 +16,99 @@ const LSB_SIZE: f32 = 187.5;
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
 
-fn reset_esp(pin: &mut OutputPin) -> Result<()> {
+struct LogCtx {
+    indent: usize,
+}
+
+impl LogCtx {
+    fn log(&self, level: &str, msg: &str) {
+        println!("{} > {}{}", level, " ".repeat(self.indent), msg);
+    }
+
+    fn enter(&mut self, msg: &str) {
+        self.log(">>>", msg);
+        self.indent += 2;
+    }
+
+    fn leave(&mut self, msg: &str) {
+        self.indent -= 2;
+        self.log("<<<", msg);
+    }
+
+    fn inf(&self, msg: &str) {
+        self.log("INF", msg);
+    }
+
+    fn wrn(&self, msg: &str) {
+        self.log("WRN", msg);
+    }
+
+    pub fn err(&self, msg: &str) {
+        self.log("ERR", msg);
+    }
+
+    pub fn ftl(&self, msg: &str) {
+        self.log("FTL", msg);
+    }
+
+    pub fn dbg(&self, msg: &str) {
+        self.log("DBG", msg);
+    }
+
+    pub fn trc(&self, msg: &str) {
+        self.log("TRC", msg);
+    }
+}
+
+fn reset_esp(l: &mut LogCtx, pin: &mut OutputPin) -> Result<()> {
+    l.enter("reset_esp");
+
+    l.dbg("Resetting ESP");
+
     pin.set_low();
 
     thread::sleep(Duration::from_millis(100));
 
     pin.set_high();
 
+    l.inf("Reset ESP");
+
+    l.leave("reset_esp");
+
     Ok(())
 }
 
-fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
+fn enable_flashing(
+    l: &mut LogCtx,
+    flash_pin: &mut OutputPin,
+    rst_pin: &mut OutputPin,
+) -> Result<()> {
+    l.enter("enable_flashing");
+
+    l.dbg("Enabling flashing");
+
     flash_pin.set_low();
 
-    reset_esp(rst_pin)?;
+    reset_esp(l, rst_pin)?;
 
     thread::sleep(Duration::from_millis(100));
 
     flash_pin.set_high();
 
+    l.inf("Flashing mode enabled");
+
+    l.leave("enable_flashing");
+
     Ok(())
 }
 
-fn flash(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
-    enable_flashing(flash_pin, rst_pin)?;
+fn flash_esp(l: &mut LogCtx, flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
+    l.enter("flash_esp");
 
+    enable_flashing(l, flash_pin, rst_pin)?;
+
+    l.dbg("Running pio run -t upload");
+    l.trc("=========================");
     let mut s = process::Command::new("pio")
         .arg("run")
         .arg("-t")
@@ -53,41 +121,84 @@ fn flash(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
         .spawn()?;
 
     s.wait()?;
+    l.trc("=========================");
+
+    l.inf("Flashing complete");
+
+    thread::sleep(Duration::from_millis(100));
+
+    reset_esp(l, rst_pin)?;
+
+    l.leave("flash_esp");
 
     Ok(())
 }
 
-fn read_voltage(
+fn measure_voltage(
+    l: &mut LogCtx,
     channel: ChannelSelection,
     adc: &mut ads1x1x::Ads1x1x<I2cInterface<I2c>, Ads1115, Resolution16Bit, OneShot>,
 ) -> nb::Result<f32, ads1x1x::Error<i2c::Error>> {
+    l.enter("read_voltage");
+
+    l.dbg(format!("Reading voltage from channel {:?}", channel).as_str());
+
     let value = block!(adc.read(channel))?;
 
-    Ok(value as f32 * LSB_SIZE / 1000000.0)
+    let voltage = value as f32 * LSB_SIZE / 1000000.0;
+
+    l.inf(format!("Voltage: {}V", voltage).as_str());
+
+    l.leave("read_voltage");
+
+    Ok(voltage)
 }
 
-fn find_usb_device() -> bool {
+fn find_usb_device(l: &mut LogCtx) -> bool {
+    l.enter("find_usb_device");
+
     for device in rusb::devices().unwrap().iter() {
         let device_desc = device.device_descriptor().unwrap();
 
         if (device_desc.vendor_id() == USB_VENDOR_ID)
             && (device_desc.product_id() == USB_PRODUCT_ID)
         {
+            l.inf("Found USB device");
+
+            l.leave("find_usb_device");
+
             return true;
         }
     }
 
+    l.err("USB device not found");
+
+    l.leave("find_usb_device");
+
     false
 }
 
-fn read_chip_id(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<String> {
-    enable_flashing(flash_pin, rst_pin)?;
+fn read_chip_id(
+    l: &mut LogCtx,
+    flash_pin: &mut OutputPin,
+    rst_pin: &mut OutputPin,
+) -> Result<String> {
+    l.enter("read_chip_id");
 
+    l.dbg("Reading chip ID");
+
+    enable_flashing(l, flash_pin, rst_pin)?;
+
+    l.dbg("Running esptool chip_id");
+    l.trc("=======================");
     let c = process::Command::new("esptool")
         .arg("--port")
         .arg("/dev/ttyUSB0")
         .arg("chip_id")
+        .stderr(process::Stdio::inherit())
+        .stdout(process::Stdio::inherit())
         .output()?;
+    l.trc("=======================");
 
     let output = String::from_utf8_lossy(&c.stdout);
 
@@ -100,17 +211,34 @@ fn read_chip_id(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<St
         .nth(1)
         .unwrap();
 
+    l.inf(format!("Chip ID: {}", chip_id).as_str());
+
+    l.leave("read_chip_id");
+
     Ok(chip_id.to_string())
 }
 
-fn read_mac_address(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<String> {
-    enable_flashing(flash_pin, rst_pin)?;
+fn read_mac_address(
+    l: &mut LogCtx,
+    flash_pin: &mut OutputPin,
+    rst_pin: &mut OutputPin,
+) -> Result<String> {
+    l.enter("read_mac_address");
 
+    l.dbg("Reading MAC address");
+
+    enable_flashing(l, flash_pin, rst_pin)?;
+
+    l.dbg("Running esptool read_mac");
+    l.trc("========================");
     let c = process::Command::new("esptool")
         .arg("--port")
         .arg("/dev/ttyUSB0")
         .arg("read_mac")
+        .stderr(process::Stdio::inherit())
+        .stdout(process::Stdio::inherit())
         .output()?;
+    l.trc("========================");
 
     let output = String::from_utf8_lossy(&c.stdout);
 
@@ -123,10 +251,16 @@ fn read_mac_address(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Resul
         .nth(1)
         .unwrap();
 
+    l.inf(format!("MAC address: {}", mac_address).as_str());
+
     Ok(mac_address.to_string())
 }
 
 fn main() {
+    let mut l = LogCtx { indent: 0 };
+
+    l.inf("Starting");
+
     let i2c = I2c::with_bus(1).unwrap();
     let gpio = Gpio::new().unwrap();
 
@@ -139,26 +273,61 @@ fn main() {
     adc.disable_comparator().unwrap();
     adc.set_data_rate(ads1x1x::DataRate16Bit::Sps860).unwrap();
 
-    while !find_usb_device() {
-        println!("Waiting for USB device to be connected...");
-
-        thread::sleep(Duration::from_secs(1));
+    {
+        l.inf("Waiting for USB device to be plugged in...");
+        while !find_usb_device(&mut l) {
+            thread::sleep(Duration::from_secs(1));
+        }
+        l.inf("USB device plugged in");
     }
 
-    let r3v3_voltage = read_voltage(ChannelSelection::SingleA2, &mut adc).unwrap();
-    let vcc_voltage = read_voltage(ChannelSelection::SingleA3, &mut adc).unwrap();
+    {
+        l.enter("measure_voltages");
+        l.dbg("Measuring voltage...");
+        let r3v3_voltage = measure_voltage(&mut l, ChannelSelection::SingleA2, &mut adc).unwrap();
+        let vcc_voltage = measure_voltage(&mut l, ChannelSelection::SingleA3, &mut adc).unwrap();
 
-    println!("3V3: {}V", r3v3_voltage);
-    println!("VCC: {}V", vcc_voltage);
+        l.inf(format!("3V3: {}V", r3v3_voltage).as_str());
+        l.inf(format!("VCC: {}V", vcc_voltage).as_str());
+        l.leave("measure_voltages");
+    }
 
-    let mac = read_mac_address(&mut flash_pin, &mut rst_pin).unwrap();
-    println!("MAC: {}", mac);
+    {
+        l.enter("read_esp_info");
+        l.dbg("Reading ESP info...");
+        let mac = read_mac_address(&mut l, &mut flash_pin, &mut rst_pin).unwrap();
+        let chip_id = read_chip_id(&mut l, &mut flash_pin, &mut rst_pin).unwrap();
+        let board_id = format!("{}-{}", mac, chip_id);
 
-    let chip_id = read_chip_id(&mut flash_pin, &mut rst_pin).unwrap();
-    println!("Chip ID: {}", chip_id);
+        l.inf(format!("MAC: {}", mac).as_str());
+        l.inf(format!("Chip ID: {}", chip_id).as_str());
+        l.inf(format!("Board ID: {}", board_id).as_str());
+        l.leave("read_esp_info");
+    }
 
-    let board_id = format!("{}-{}", mac, chip_id);
-    println!("Board ID: {}", board_id);
+    {
+        l.enter("flash_esp");
+        l.dbg("Flashing ESP...");
+        flash_esp(&mut l, &mut flash_pin, &mut rst_pin).unwrap();
+        l.inf("ESP flashed");
+        l.leave("flash_esp");
+    }
 
-    flash(&mut flash_pin, &mut rst_pin).unwrap();
+    {
+        l.dbg("Connecting to serial port...");
+        let mut serial = serialport::new("/dev/ttyUSB0", 115200)
+            .timeout(Duration::from_millis(10))
+            .data_bits(serialport::DataBits::Seven)
+            .open()
+            .unwrap();
+
+        l.inf("Streaming logs from serial port...");
+        l.trc("==================================");
+
+        let mut buf = [0; 128];
+        loop {
+            let bytes_read = serial.read(&mut buf).unwrap();
+            println!("{}", String::from_utf8_lossy(&buf[..bytes_read]));
+        }
+    }
 }

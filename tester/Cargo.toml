@@ -8,3 +8,4 @@ ads1x1x = "0.2.2"
 nb = "1.0.0"
 rppal = { version = "0.13.1", features = ["hal"] }
 rusb = { version = "0.9.1", features = ["vendored"] }
+serialport = "4.2.0"
