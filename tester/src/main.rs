@@ -196,11 +196,12 @@ fn read_chip_id(
         .arg("/dev/ttyUSB0")
         .arg("chip_id")
         .stderr(process::Stdio::inherit())
-        .stdout(process::Stdio::inherit())
         .output()?;
-    l.trc("=======================");
 
     let output = String::from_utf8_lossy(&c.stdout);
+    println!("{}", output.trim());
+
+    l.trc("=======================");
 
     let chip_id = output
         .lines()
@@ -236,11 +237,12 @@ fn read_mac_address(
         .arg("/dev/ttyUSB0")
         .arg("read_mac")
         .stderr(process::Stdio::inherit())
-        .stdout(process::Stdio::inherit())
         .output()?;
-    l.trc("========================");
 
     let output = String::from_utf8_lossy(&c.stdout);
+    println!("{}", output.trim());
+
+    l.trc("========================");
 
     let mac_address = output
         .lines()
