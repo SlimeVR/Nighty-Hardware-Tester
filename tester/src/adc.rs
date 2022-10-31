@@ -35,15 +35,15 @@ where
     ) -> nb::Result<f32, ads1x1x::Error<E>> {
         l.enter("read_voltage");
 
-        l.dbg(format!("Reading voltage from channel {:?}", channel).as_str());
+        l.debug(format!("Reading voltage from channel {:?}", channel).as_str());
 
         let value = nb::block!(self.instance.read(channel))?;
 
         let voltage = value as f32 * LSB_SIZE / 1000000.0;
 
-        l.inf(format!("Voltage: {}V", voltage).as_str());
+        l.info(format!("Voltage: {}V", voltage).as_str());
 
-        l.leave("read_voltage");
+        l.leave();
 
         Ok(voltage)
     }

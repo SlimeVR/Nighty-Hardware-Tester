@@ -13,15 +13,16 @@ pub fn read_chip_id(
         &mut gpio::OutputPin,
         &mut gpio::OutputPin,
     ) -> gpio::Result<()>,
+    reset_chip: &dyn Fn(&mut log::LogCtx, &mut gpio::OutputPin) -> gpio::Result<()>,
 ) -> gpio::Result<String> {
     l.enter("read_chip_id");
 
-    l.dbg("Reading chip ID");
+    l.debug("Reading chip ID");
 
     enable_flashing(l, flash_pin, rst_pin)?;
 
-    l.dbg("Running esptool chip_id");
-    l.trc("=======================");
+    l.debug("Running esptool chip_id");
+    l.trace("=======================");
     let c = process::Command::new("esptool")
         .arg("--port")
         .arg("/dev/ttyUSB0")
@@ -32,7 +33,7 @@ pub fn read_chip_id(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output.trim());
 
-    l.trc("=======================");
+    l.trace("=======================");
 
     let chip_id = output
         .lines()
@@ -43,9 +44,11 @@ pub fn read_chip_id(
         .nth(1)
         .unwrap();
 
-    l.inf(format!("Chip ID: {}", chip_id).as_str());
+    l.info(format!("Chip ID: {}", chip_id).as_str());
 
-    l.leave("read_chip_id");
+    reset_chip(l, rst_pin)?;
+
+    l.leave();
 
     Ok(chip_id.to_string())
 }
@@ -59,15 +62,16 @@ pub fn read_mac_address(
         &mut gpio::OutputPin,
         &mut gpio::OutputPin,
     ) -> gpio::Result<()>,
+    reset_chip: &dyn Fn(&mut log::LogCtx, &mut gpio::OutputPin) -> gpio::Result<()>,
 ) -> gpio::Result<String> {
     l.enter("read_mac_address");
 
-    l.dbg("Reading MAC address");
+    l.debug("Reading MAC address");
 
     enable_flashing(l, flash_pin, rst_pin)?;
 
-    l.dbg("Running esptool read_mac");
-    l.trc("========================");
+    l.debug("Running esptool read_mac");
+    l.trace("========================");
     let c = process::Command::new("esptool")
         .arg("--port")
         .arg("/dev/ttyUSB0")
@@ -78,7 +82,7 @@ pub fn read_mac_address(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output.trim());
 
-    l.trc("========================");
+    l.trace("========================");
 
     let mac_address = output
         .lines()
@@ -89,7 +93,11 @@ pub fn read_mac_address(
         .nth(1)
         .unwrap();
 
-    l.inf(format!("MAC address: {}", mac_address).as_str());
+    l.info(format!("MAC address: {}", mac_address).as_str());
+
+    reset_chip(l, rst_pin)?;
+
+    l.leave();
 
     Ok(mac_address.to_string())
 }

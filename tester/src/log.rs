@@ -1,47 +1,56 @@
+use colored::Colorize;
+
 pub struct LogCtx {
-    indent: usize,
+    stack: Vec<String>,
 }
 
 impl LogCtx {
     pub fn new() -> LogCtx {
-        LogCtx { indent: 0 }
+        LogCtx { stack: vec![] }
     }
 
-    fn log(&self, level: &str, msg: &str) {
-        println!("{} > {}{}", level, " ".repeat(self.indent), msg);
+    fn log(&self, level: colored::ColoredString, msg: colored::ColoredString) {
+        let stack = if self.stack.len() > 0 {
+            "[".to_string() + &self.stack.join("::") + "]"
+        } else {
+            "".to_string()
+        }
+        .bright_black();
+
+        println!("{: <5} {: <40} {}", level, msg, stack,);
     }
 
-    pub fn enter(&mut self, msg: &str) {
-        self.log(">>>", msg);
-        self.indent += 2;
+    pub fn enter(&mut self, stage: &str) {
+        self.stack.push(stage.to_string());
+        self.log("-->".green(), format!("Entering stage: {}", stage).white());
     }
 
-    pub fn leave(&mut self, msg: &str) {
-        self.indent -= 2;
-        self.log("<<<", msg);
+    pub fn leave(&mut self) {
+        let stage = self.stack.pop().unwrap();
+        self.log("<--".red(), format!("Leaving stage: {}", stage).white());
     }
 
-    pub fn inf(&self, msg: &str) {
-        self.log("INF", msg);
+    pub fn info(&self, msg: &str) {
+        self.log("INFO".green(), msg.bright_white());
     }
 
-    pub fn wrn(&self, msg: &str) {
-        self.log("WRN", msg);
+    pub fn warn(&self, msg: &str) {
+        self.log("WARN".yellow(), msg.yellow());
     }
 
-    pub fn err(&self, msg: &str) {
-        self.log("ERR", msg);
+    pub fn error(&self, msg: &str) {
+        self.log("ERROR".red(), msg.red());
     }
 
-    pub fn ftl(&self, msg: &str) {
-        self.log("FTL", msg);
+    pub fn fatal(&self, msg: &str) {
+        self.log("FATAL".bright_red(), msg.bright_red());
     }
 
-    pub fn dbg(&self, msg: &str) {
-        self.log("DBG", msg);
+    pub fn debug(&self, msg: &str) {
+        self.log("DEBUG".bright_black(), msg.bright_black());
     }
 
-    pub fn trc(&self, msg: &str) {
-        self.log("TRC", msg);
+    pub fn trace(&self, msg: &str) {
+        self.log("TRACE".bright_black(), msg.bright_yellow());
     }
 }
