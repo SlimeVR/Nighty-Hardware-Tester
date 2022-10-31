@@ -259,6 +259,7 @@ name = "tester"
 version = "0.1.0"
 dependencies = [
  "ads1x1x",
+ "embedded-hal 0.2.7",
  "nb 1.0.0",
  "rppal",
  "rusb",
