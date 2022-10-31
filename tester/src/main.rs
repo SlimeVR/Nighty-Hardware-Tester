@@ -318,7 +318,7 @@ fn main() {
     {
         l.dbg("Connecting to serial port...");
         let mut serial = serialport::new("/dev/ttyUSB0", 115200)
-            .timeout(Duration::from_millis(10))
+            .timeout(Duration::from_millis(10000))
             .data_bits(serialport::DataBits::Seven)
             .open()
             .unwrap();
@@ -329,7 +329,7 @@ fn main() {
         let mut buf = [0; 128];
         loop {
             let bytes_read = serial.read(&mut buf).unwrap();
-            println!("{}", String::from_utf8_lossy(&buf[..bytes_read]));
+            print!("{}", String::from_utf8_lossy(&buf[..bytes_read]));
         }
     }
 }
