@@ -45,6 +45,8 @@ fn flash(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
         .arg("run")
         .arg("-t")
         .arg("upload")
+        .arg("--upload-port")
+        .arg("/dev/ttyUSB0")
         .current_dir("/home/pi/slimevr-tracker-esp")
         .stderr(process::Stdio::inherit())
         .stdout(process::Stdio::inherit())
@@ -78,6 +80,52 @@ fn find_usb_device() -> bool {
     false
 }
 
+fn read_chip_id(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<String> {
+    enable_flashing(flash_pin, rst_pin)?;
+
+    let c = process::Command::new("esptool")
+        .arg("--port")
+        .arg("/dev/ttyUSB0")
+        .arg("chip_id")
+        .output()?;
+
+    let output = String::from_utf8_lossy(&c.stdout);
+
+    let chip_id = output
+        .lines()
+        .filter(|l| l.contains("Chip ID:"))
+        .nth(0)
+        .unwrap()
+        .split("Chip ID: ")
+        .nth(1)
+        .unwrap();
+
+    Ok(chip_id.to_string())
+}
+
+fn read_mac_address(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<String> {
+    enable_flashing(flash_pin, rst_pin)?;
+
+    let c = process::Command::new("esptool")
+        .arg("--port")
+        .arg("/dev/ttyUSB0")
+        .arg("read_mac")
+        .output()?;
+
+    let output = String::from_utf8_lossy(&c.stdout);
+
+    let mac_address = output
+        .lines()
+        .filter(|l| l.contains("MAC:"))
+        .nth(0)
+        .unwrap()
+        .split("MAC: ")
+        .nth(1)
+        .unwrap();
+
+    Ok(mac_address.to_string())
+}
+
 fn main() {
     let i2c = I2c::with_bus(1).unwrap();
     let gpio = Gpio::new().unwrap();
@@ -102,6 +150,15 @@ fn main() {
 
     println!("3V3: {}V", r3v3_voltage);
     println!("VCC: {}V", vcc_voltage);
+
+    let mac = read_mac_address(&mut flash_pin, &mut rst_pin).unwrap();
+    println!("MAC: {}", mac);
+
+    let chip_id = read_chip_id(&mut flash_pin, &mut rst_pin).unwrap();
+    println!("Chip ID: {}", chip_id);
+
+    let board_id = format!("{}-{}", mac, chip_id);
+    println!("Board ID: {}", board_id);
 
     flash(&mut flash_pin, &mut rst_pin).unwrap();
 }
