@@ -2,27 +2,21 @@ use std::process;
 
 use rppal::gpio;
 
-use crate::log;
-
 pub fn read_chip_id(
-    l: &mut log::LogCtx,
     flash_pin: &mut gpio::OutputPin,
     rst_pin: &mut gpio::OutputPin,
-    enable_flashing: &dyn Fn(
-        &mut log::LogCtx,
-        &mut gpio::OutputPin,
-        &mut gpio::OutputPin,
-    ) -> gpio::Result<()>,
-    reset_chip: &dyn Fn(&mut log::LogCtx, &mut gpio::OutputPin) -> gpio::Result<()>,
+    enable_flashing: &dyn Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
+    reset_chip: &dyn Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
 ) -> gpio::Result<String> {
-    l.enter("read_chip_id");
+    let s = tracing::span!(tracing::Level::DEBUG, "read_chip_id");
+    let _enter = s.enter();
 
-    l.debug("Reading chip ID");
+    log::debug!("Reading chip ID");
 
-    enable_flashing(l, flash_pin, rst_pin)?;
+    enable_flashing(flash_pin, rst_pin)?;
 
-    l.debug("Running esptool chip_id");
-    l.trace("=======================");
+    log::debug!("Running esptool chip_id");
+    log::trace!("=======================");
     let c = process::Command::new("esptool")
         .arg("--port")
         .arg("/dev/ttyUSB0")
@@ -33,7 +27,7 @@ pub fn read_chip_id(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output.trim());
 
-    l.trace("=======================");
+    log::trace!("=======================");
 
     let chip_id = output
         .lines()
@@ -44,34 +38,28 @@ pub fn read_chip_id(
         .nth(1)
         .unwrap();
 
-    l.info(format!("Chip ID: {}", chip_id).as_str());
+    log::info!("Chip ID: {}", chip_id);
 
-    reset_chip(l, rst_pin)?;
-
-    l.leave();
+    reset_chip(rst_pin)?;
 
     Ok(chip_id.to_string())
 }
 
 pub fn read_mac_address(
-    l: &mut log::LogCtx,
     flash_pin: &mut gpio::OutputPin,
     rst_pin: &mut gpio::OutputPin,
-    enable_flashing: &dyn Fn(
-        &mut log::LogCtx,
-        &mut gpio::OutputPin,
-        &mut gpio::OutputPin,
-    ) -> gpio::Result<()>,
-    reset_chip: &dyn Fn(&mut log::LogCtx, &mut gpio::OutputPin) -> gpio::Result<()>,
+    enable_flashing: &dyn Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
+    reset_chip: &dyn Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
 ) -> gpio::Result<String> {
-    l.enter("read_mac_address");
+    let s = tracing::span!(tracing::Level::DEBUG, "read_mac_address");
+    let _enter = s.enter();
 
-    l.debug("Reading MAC address");
+    log::debug!("Reading MAC address");
 
-    enable_flashing(l, flash_pin, rst_pin)?;
+    enable_flashing(flash_pin, rst_pin)?;
 
-    l.debug("Running esptool read_mac");
-    l.trace("========================");
+    log::debug!("Running esptool read_mac");
+    log::trace!("========================");
     let c = process::Command::new("esptool")
         .arg("--port")
         .arg("/dev/ttyUSB0")
@@ -82,7 +70,7 @@ pub fn read_mac_address(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output.trim());
 
-    l.trace("========================");
+    log::trace!("========================");
 
     let mac_address = output
         .lines()
@@ -93,11 +81,9 @@ pub fn read_mac_address(
         .nth(1)
         .unwrap();
 
-    l.info(format!("MAC address: {}", mac_address).as_str());
+    log::info!("MAC address: {}", mac_address);
 
-    reset_chip(l, rst_pin)?;
-
-    l.leave();
+    reset_chip(rst_pin)?;
 
     Ok(mac_address.to_string())
 }

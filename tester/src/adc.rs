@@ -1,7 +1,5 @@
 use ads1x1x::{ic, interface, mode, DynamicOneShot};
 
-use crate::log;
-
 const LSB_SIZE: f32 = 187.5;
 
 pub struct Ads1115<I2C> {
@@ -30,20 +28,18 @@ where
 
     pub fn measure(
         &mut self,
-        l: &mut log::LogCtx,
         channel: ads1x1x::ChannelSelection,
     ) -> nb::Result<f32, ads1x1x::Error<E>> {
-        l.enter("read_voltage");
+        let s = tracing::span!(tracing::Level::DEBUG, "read_voltage");
+        let _enter = s.enter();
 
-        l.debug(format!("Reading voltage from channel {:?}", channel).as_str());
+        log::debug!("Reading voltage from channel {:?}", channel);
 
         let value = nb::block!(self.instance.read(channel))?;
 
         let voltage = value as f32 * LSB_SIZE / 1000000.0;
 
-        l.info(format!("Voltage: {}V", voltage).as_str());
-
-        l.leave();
+        log::info!("Voltage: {}V", voltage);
 
         Ok(voltage)
     }
