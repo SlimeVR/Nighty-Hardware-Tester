@@ -5,7 +5,7 @@ use rppal::{
     i2c::I2c,
 };
 use std::{process, thread, time::Duration};
-use tester::{adc, esp, usb};
+use tester::{adc, esp, tui, usb};
 
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
@@ -78,6 +78,25 @@ fn flash_esp(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
 }
 
 fn main() {
+    let t = tui::TUI::new().unwrap();
+
+    let (mut renderer, mut input_reader, mut ticker) = t.split();
+
+    thread::spawn(move || {
+        input_reader.run().unwrap();
+    });
+
+    thread::spawn(move || {
+        ticker.run().unwrap();
+    });
+
+    // TODO: Implement test runner inside of thread
+    // TODO: Implement logging inside of TUI
+
+    renderer.run().unwrap();
+
+    // The rest of the code will only run if you press `q` or `Esc` to exit the TUI.
+
     tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .without_time()
