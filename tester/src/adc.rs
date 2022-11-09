@@ -30,16 +30,9 @@ where
         &mut self,
         channel: ads1x1x::ChannelSelection,
     ) -> nb::Result<f32, ads1x1x::Error<E>> {
-        let s = tracing::span!(tracing::Level::DEBUG, "read_voltage");
-        let _enter = s.enter();
-
-        log::debug!("Reading voltage from channel {:?}", channel);
-
         let value = nb::block!(self.instance.read(channel))?;
 
         let voltage = value as f32 * LSB_SIZE / 1000000.0;
-
-        log::info!("Voltage: {}V", voltage);
 
         Ok(voltage)
     }
