@@ -4,7 +4,7 @@ use rppal::{
     i2c::I2c,
 };
 use std::{thread, time::Duration};
-use tester::{adc, esptool, tui, usb};
+use tester::{adc, esptool, pio, tui, usb};
 
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
@@ -46,48 +46,122 @@ fn main() {
         let mut adc = adc::Ads1115::new(i2c).unwrap();
 
         loop {
-            reporter.warn("Connect device".to_string());
+            reporter.warn("[ Please connect the device ]".to_string());
 
             usb::wait_until_device_is_connected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
-            {
+            let wait_for_next_board = |reporter: &mut tui::Reporter| {
+                reporter.warn("[ Please disconnect the device ]".to_string());
+
+                usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
+
+                reporter.reset();
+            };
+
+            reporter.reset();
+
+            let (vout, r3v3, err) = {
                 let vout_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
-                reporter.success(format!("VOUT voltage: {}V", vout_voltage));
+                let vout_err = vout_voltage < 4.6 || vout_voltage > 5.1;
+
+                if vout_err {
+                    reporter.warn(format!("╳ VOUT voltage: {}V (> 4.6V < 5.1V)", vout_voltage));
+                } else {
+                    reporter.success(format!("✓ VOUT voltage: {}V", vout_voltage));
+                }
 
                 let r3v3_voltage = adc.measure(ChannelSelection::SingleA2).unwrap();
-                reporter.success(format!("3V3 voltage: {}V", r3v3_voltage));
+                let r3v3_err = r3v3_voltage < 2.8 || r3v3_voltage > 3.2;
+                if r3v3_err {
+                    reporter.warn(format!("╳ 3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
+                } else {
+                    reporter.success(format!("✓ 3V3 voltage: {}V", r3v3_voltage));
+                }
+
+                (vout_err, r3v3_err, vout_err || r3v3_err)
+            };
+
+            if err {
+                reporter.warn("-> Faulty power circuit".to_string());
+
+                wait_for_next_board(&mut reporter);
+                continue;
             }
 
-            {
-                let mac = esptool::read_mac_address(
+            let (mac, chip_id) = {
+                let mac = match esptool::read_mac_address(
                     &mut flash_pin,
                     &mut rst_pin,
                     &enable_flashing,
                     &reset_esp,
-                )
-                .unwrap();
-                reporter.success(format!("MAC: {}", mac));
+                ) {
+                    Ok(mac) => {
+                        // TODO: Check if we already have this MAC address in the database
 
-                let chip_id = esptool::read_chip_id(
+                        reporter.success(format!("✓ MAC: {}", mac));
+
+                        Ok(mac)
+                    }
+                    Err(e) => {
+                        reporter.warn(format!("╳ MAC address: {}", e));
+
+                        Err(e)
+                    }
+                };
+
+                let chip_id = match esptool::read_chip_id(
                     &mut flash_pin,
                     &mut rst_pin,
                     &enable_flashing,
                     &reset_esp,
-                )
-                .unwrap();
-                reporter.success(format!("Chip ID: {}", chip_id));
+                ) {
+                    Ok(chip_id) => {
+                        reporter.success(format!("✓ Chip ID: {}", chip_id));
+                        Ok(chip_id)
+                    }
+                    Err(e) => {
+                        reporter.error(format!("╳ Chip ID: {}", e));
+                        Err(e)
+                    }
+                };
 
-                // let board_id = format!("{}-{}", mac, chip_id);
+                (mac, chip_id)
+            };
+
+            if mac.is_err() || chip_id.is_err() {
+                reporter.error("-> ESP8266 faulty".to_string());
+
+                wait_for_next_board(&mut reporter);
+                continue;
             }
 
-            // {
-            //     let s = tracing::span!(tracing::Level::INFO, "flash_esp");
-            //     let _enter = s.enter();
+            let board_id = format!("{}-{}", mac.unwrap(), chip_id.unwrap());
 
-            //     log::debug!("Flashing ESP...");
-            //     flash_esp(&mut flash_pin, &mut rst_pin).unwrap();
-            //     log::info!("ESP flashed");
-            // }
+            let flash = {
+                match pio::flash(
+                    "esp12e",
+                    &mut flash_pin,
+                    &mut rst_pin,
+                    &enable_flashing,
+                    &reset_esp,
+                ) {
+                    Ok(_) => {
+                        reporter.success("✓ Flashed".to_string());
+                        Ok(())
+                    }
+                    Err(e) => {
+                        reporter.error(format!("╳ Flashing: {}", e));
+                        Err(e)
+                    }
+                }
+            };
+
+            if flash.is_err() {
+                reporter.error("-> Flashing failed".to_string());
+
+                wait_for_next_board(&mut reporter);
+                continue;
+            }
 
             // {
             //     log::debug!("Connecting to serial port...");
@@ -107,11 +181,7 @@ fn main() {
             //     }
             // }
 
-            reporter.warn("Disconnect device".to_string());
-
-            usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
-
-            reporter.reset();
+            wait_for_next_board(&mut reporter);
         }
     });
 
