@@ -8,8 +8,9 @@ enum Event {
 
 enum ReportEvent {
     Success(String),
-    Warn(String),
     Error(String),
+    InProgress(String),
+    Action(String),
 }
 
 pub struct TUI {
@@ -57,8 +58,9 @@ impl Renderer {
             .map(|e| {
                 let (style, s) = match &e {
                     ReportEvent::Success(s) => (colored::Color::Green, s),
-                    ReportEvent::Warn(s) => (colored::Color::Yellow, s),
                     ReportEvent::Error(s) => (colored::Color::Red, s),
+                    ReportEvent::InProgress(s) => (colored::Color::White, s),
+                    ReportEvent::Action(s) => (colored::Color::BrightBlue, s),
                 };
 
                 format!("{}", s.color(style))
@@ -78,7 +80,21 @@ impl Renderer {
         loop {
             match self.rx.recv()? {
                 Event::ReportEvent(msg) => {
-                    self.report_events.push(msg);
+                    match msg {
+                        ReportEvent::InProgress(_) => {
+                            self.report_events.push(msg);
+                        }
+                        _ => {
+                            if let Some(last_event) = self.report_events.last() {
+                                if let ReportEvent::InProgress(_) = last_event {
+                                    self.report_events.pop();
+                                }
+                            }
+
+                            self.report_events.push(msg);
+                        }
+                    }
+
                     self.draw()?;
                 }
                 Event::ResetReport => {
@@ -97,15 +113,21 @@ impl Reporter {
             .unwrap();
     }
 
-    pub fn warn(&mut self, msg: impl ToString) {
-        self.tx
-            .send(Event::ReportEvent(ReportEvent::Warn(msg.to_string())))
-            .unwrap();
-    }
-
     pub fn error(&mut self, msg: impl ToString) {
         self.tx
             .send(Event::ReportEvent(ReportEvent::Error(msg.to_string())))
+            .unwrap();
+    }
+
+    pub fn in_progress(&mut self, msg: impl ToString) {
+        self.tx
+            .send(Event::ReportEvent(ReportEvent::InProgress(msg.to_string())))
+            .unwrap();
+    }
+
+    pub fn action(&mut self, msg: impl ToString) {
+        self.tx
+            .send(Event::ReportEvent(ReportEvent::Action(msg.to_string())))
             .unwrap();
     }
 

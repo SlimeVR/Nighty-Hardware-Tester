@@ -46,12 +46,12 @@ fn main() {
         let mut adc = adc::Ads1115::new(i2c).unwrap();
 
         loop {
-            reporter.warn("[ Please connect the device ]".to_string());
+            reporter.action("[ Please connect the device ]".to_string());
 
             usb::wait_until_device_is_connected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
             let wait_for_next_board = |reporter: &mut tui::Reporter| {
-                reporter.warn("[ Please disconnect the device ]".to_string());
+                reporter.action("[ Please disconnect the device ]".to_string());
 
                 usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
@@ -61,19 +61,20 @@ fn main() {
             reporter.reset();
 
             let (vout, r3v3, err) = {
+                reporter.in_progress("Measuring VOUT...");
                 let vout_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
                 let vout_err = vout_voltage < 4.6 || vout_voltage > 5.1;
-
                 if vout_err {
-                    reporter.warn(format!("╳ VOUT voltage: {}V (> 4.6V < 5.1V)", vout_voltage));
+                    reporter.error(format!("╳ VOUT voltage: {}V (> 4.6V < 5.1V)", vout_voltage));
                 } else {
                     reporter.success(format!("✓ VOUT voltage: {}V", vout_voltage));
                 }
 
+                reporter.in_progress("Measuring 3V3...");
                 let r3v3_voltage = adc.measure(ChannelSelection::SingleA2).unwrap();
                 let r3v3_err = r3v3_voltage < 2.8 || r3v3_voltage > 3.2;
                 if r3v3_err {
-                    reporter.warn(format!("╳ 3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
+                    reporter.error(format!("╳ 3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
                 } else {
                     reporter.success(format!("✓ 3V3 voltage: {}V", r3v3_voltage));
                 }
@@ -82,13 +83,14 @@ fn main() {
             };
 
             if err {
-                reporter.warn("-> Faulty power circuit".to_string());
+                reporter.error("-> Faulty power circuit".to_string());
 
                 wait_for_next_board(&mut reporter);
                 continue;
             }
 
             let (mac, chip_id) = {
+                reporter.in_progress("Reading MAC address...");
                 let mac = match esptool::read_mac_address(
                     &mut flash_pin,
                     &mut rst_pin,
@@ -103,12 +105,13 @@ fn main() {
                         Ok(mac)
                     }
                     Err(e) => {
-                        reporter.warn(format!("╳ MAC address: {}", e));
+                        reporter.error(format!("╳ MAC address: {}", e));
 
                         Err(e)
                     }
                 };
 
+                reporter.in_progress("Reading chip ID...");
                 let chip_id = match esptool::read_chip_id(
                     &mut flash_pin,
                     &mut rst_pin,
@@ -138,6 +141,7 @@ fn main() {
             let board_id = format!("{}-{}", mac.unwrap(), chip_id.unwrap());
 
             let flash = {
+                reporter.in_progress("Flashing...");
                 match pio::flash(
                     "esp12e",
                     &mut flash_pin,
