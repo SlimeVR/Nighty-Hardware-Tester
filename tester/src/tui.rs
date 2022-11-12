@@ -84,8 +84,6 @@ impl Renderer {
                 Event::ResetReport => {
                     self.report_events.clear();
                     self.draw()?;
-
-                    println!("---- RESET! ----");
                 }
             }
         }
@@ -97,24 +95,18 @@ impl Reporter {
         self.tx
             .send(Event::ReportEvent(ReportEvent::Success(msg.to_string())))
             .unwrap();
-
-        // println!(">>>> Sent success: {}", msg.to_string());
     }
 
     pub fn warn(&mut self, msg: impl ToString) {
         self.tx
             .send(Event::ReportEvent(ReportEvent::Warn(msg.to_string())))
             .unwrap();
-
-        // println!(">>>> Sent warn: {}", msg.to_string());
     }
 
     pub fn error(&mut self, msg: impl ToString) {
         self.tx
             .send(Event::ReportEvent(ReportEvent::Error(msg.to_string())))
             .unwrap();
-
-        // println!(">>>> Sent error: {}", msg.to_string());
     }
 
     pub fn reset(&mut self) {
