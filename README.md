@@ -1,3 +1,3 @@
 # Nighty-Hardware-Tester
 
-Software suit for testing hardware (like assembled PCBs)
+Software suite for testing hardware (like assembled PCBs)
