@@ -63,7 +63,7 @@ fn main() {
             let (vout, r3v3, err) = {
                 reporter.in_progress("Measuring VOUT...");
                 let vout_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
-                let vout_err = vout_voltage < 4.6 || vout_voltage > 5.1;
+                let vout_err = vout_voltage < 4.5 || vout_voltage > 5.2;
                 if vout_err {
                     reporter.error(format!("╳ VOUT voltage: {}V (> 4.6V < 5.1V)", vout_voltage));
                 } else {
