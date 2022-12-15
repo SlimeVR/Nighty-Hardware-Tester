@@ -167,23 +167,25 @@ fn main() {
                 continue;
             }
 
-            // {
-            //     log::debug!("Connecting to serial port...");
-            //     let mut serial = serialport::new("/dev/ttyUSB0", 115200)
-            //         .timeout(Duration::from_millis(10000))
-            //         .data_bits(serialport::DataBits::Seven)
-            //         .open()
-            //         .unwrap();
+            let serial = serialport::new("/dev/ttyUSB0", 115200)
+                .timeout(Duration::from_millis(10000))
+                .data_bits(serialport::DataBits::Seven)
+                .open();
 
-            //     log::info!("Streaming logs from serial port...");
-            //     log::trace!("==================================");
+            if serial.is_err() {
+                reporter.error("╳ Serial port: Could not open serial port".to_string());
+                continue;
+            }
 
-            //     let mut buf = [0; 128];
-            //     loop {
-            //         let bytes_read = serial.read(&mut buf).unwrap();
-            //         print!("{}", String::from_utf8_lossy(&buf[..bytes_read]));
-            //     }
-            // }
+            let mut serial = serial.unwrap();
+
+            reporter.action("Streaming logs from serial port...");
+            reporter.action("==================================");
+
+            let mut buf = [0; 128];
+            while let Ok(bytes_read) = serial.read(&mut buf) {
+                print!("{}", String::from_utf8_lossy(&buf[..bytes_read]));
+            }
 
             wait_for_next_board(&mut reporter);
         }
