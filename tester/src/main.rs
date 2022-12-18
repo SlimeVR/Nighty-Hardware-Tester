@@ -40,6 +40,10 @@ fn main() {
     let (mut renderer, mut reporter) = t.split();
 
     spawn(move || {
+        reporter.in_progress("Building firmware...");
+        pio::build("esp12e").unwrap();
+        reporter.reset();
+
         let i2c = I2c::with_bus(1).unwrap();
         let gpio = Gpio::new().unwrap();
 
@@ -134,8 +138,8 @@ fn main() {
 
             let flash = {
                 reporter.in_progress("Flashing...");
-                match pio::flash(
-                    "esp12e",
+                match esptool::write_flash(
+                    "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
                     &mut flash_pin,
                     &mut rst_pin,
                     &enable_flashing,

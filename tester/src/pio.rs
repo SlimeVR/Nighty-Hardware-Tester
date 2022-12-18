@@ -2,6 +2,17 @@ use std::{process, thread, time};
 
 use rppal::gpio;
 
+pub fn build(environment: &str) -> gpio::Result<()> {
+    process::Command::new("pio")
+        .arg("run")
+        .arg("-e")
+        .arg(environment)
+        .current_dir("/home/pi/slimevr-tracker-esp")
+        .output()?;
+
+    Ok(())
+}
+
 pub fn flash(
     environment: &str,
     flash_pin: &mut gpio::OutputPin,
