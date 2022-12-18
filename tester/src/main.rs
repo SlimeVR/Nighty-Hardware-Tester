@@ -3,7 +3,10 @@ use rppal::{
     gpio::{Gpio, OutputPin, Result},
     i2c::I2c,
 };
-use std::{thread, time::Duration};
+use std::{
+    thread::{sleep, spawn},
+    time::Duration,
+};
 use tester::{adc, esptool, pio, tui, usb};
 
 const USB_VENDOR_ID: u16 = 0x1a86;
@@ -12,7 +15,7 @@ const USB_PRODUCT_ID: u16 = 0x7523;
 fn reset_esp(pin: &mut OutputPin) -> Result<()> {
     pin.set_low();
 
-    thread::sleep(Duration::from_millis(100));
+    sleep(Duration::from_millis(500));
 
     pin.set_high();
 
@@ -24,7 +27,7 @@ fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result
 
     reset_esp(rst_pin)?;
 
-    thread::sleep(Duration::from_millis(100));
+    sleep(Duration::from_millis(500));
 
     flash_pin.set_high();
 
@@ -36,12 +39,12 @@ fn main() {
 
     let (mut renderer, mut reporter) = t.split();
 
-    thread::spawn(move || {
+    spawn(move || {
         let i2c = I2c::with_bus(1).unwrap();
         let gpio = Gpio::new().unwrap();
 
-        let mut rst_pin = gpio.get(4).unwrap().into_output_high();
-        let mut flash_pin = gpio.get(17).unwrap().into_output_high();
+        let mut rst_pin = gpio.get(6).unwrap().into_output_high();
+        let mut flash_pin = gpio.get(22).unwrap().into_output_high();
 
         let mut adc = adc::Ads1115::new(i2c).unwrap();
 
@@ -58,20 +61,28 @@ fn main() {
                 reporter.reset();
             };
 
+            sleep(Duration::from_millis(1000));
+
             reporter.reset();
 
-            let (vout, r3v3, err) = {
+            reporter.success("✓ Device connected".to_string());
+
+            let (vout, r3v3, bplus, err) = {
                 reporter.in_progress("Measuring VOUT...");
-                let vout_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
+                let vout_voltage = adc.measure(ChannelSelection::SingleA2).unwrap();
                 let vout_err = vout_voltage < 4.5 || vout_voltage > 5.2;
                 if vout_err {
-                    reporter.error(format!("╳ VOUT voltage: {}V (> 4.6V < 5.1V)", vout_voltage));
+                    reporter.error(format!("╳ VOUT voltage: {}V (> 4.5V < 5.2V)", vout_voltage));
                 } else {
                     reporter.success(format!("✓ VOUT voltage: {}V", vout_voltage));
                 }
 
+                reporter.in_progress("Measuring B+...");
+                let bplus_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
+                reporter.success(format!("▪️ B+ voltage: {}V", bplus_voltage));
+
                 reporter.in_progress("Measuring 3V3...");
-                let r3v3_voltage = adc.measure(ChannelSelection::SingleA2).unwrap();
+                let r3v3_voltage = adc.measure(ChannelSelection::SingleA0).unwrap();
                 let r3v3_err = r3v3_voltage < 2.8 || r3v3_voltage > 3.2;
                 if r3v3_err {
                     reporter.error(format!("╳ 3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
@@ -79,7 +90,7 @@ fn main() {
                     reporter.success(format!("✓ 3V3 voltage: {}V", r3v3_voltage));
                 }
 
-                (vout_err, r3v3_err, vout_err || r3v3_err)
+                (vout_err, r3v3_err, bplus_voltage, vout_err || r3v3_err)
             };
 
             if err {
@@ -89,7 +100,7 @@ fn main() {
                 continue;
             }
 
-            let (mac, chip_id) = {
+            let (mac) = {
                 reporter.in_progress("Reading MAC address...");
                 let mac = match esptool::read_mac_address(
                     &mut flash_pin,
@@ -111,34 +122,15 @@ fn main() {
                     }
                 };
 
-                reporter.in_progress("Reading chip ID...");
-                let chip_id = match esptool::read_chip_id(
-                    &mut flash_pin,
-                    &mut rst_pin,
-                    &enable_flashing,
-                    &reset_esp,
-                ) {
-                    Ok(chip_id) => {
-                        reporter.success(format!("✓ Chip ID: {}", chip_id));
-                        Ok(chip_id)
-                    }
-                    Err(e) => {
-                        reporter.error(format!("╳ Chip ID: {}", e));
-                        Err(e)
-                    }
-                };
-
-                (mac, chip_id)
+                (mac)
             };
 
-            if mac.is_err() || chip_id.is_err() {
+            if mac.is_err() {
                 reporter.error("-> ESP8266 faulty".to_string());
 
                 wait_for_next_board(&mut reporter);
                 continue;
             }
-
-            let board_id = format!("{}-{}", mac.unwrap(), chip_id.unwrap());
 
             let flash = {
                 reporter.in_progress("Flashing...");

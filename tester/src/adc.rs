@@ -21,7 +21,7 @@ where
         let mut adc = ads1x1x::Ads1x1x::new_ads1115(i2c, ads1x1x::SlaveAddr::default());
         adc.set_full_scale_range(ads1x1x::FullScaleRange::Within6_144V)?;
         adc.disable_comparator()?;
-        adc.set_data_rate(ads1x1x::DataRate16Bit::Sps860)?;
+        adc.set_data_rate(ads1x1x::DataRate16Bit::Sps250)?;
 
         Ok(Ads1115 { instance: adc })
     }
