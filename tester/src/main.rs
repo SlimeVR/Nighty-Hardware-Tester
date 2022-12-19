@@ -175,12 +175,35 @@ fn main() {
 
             let mut serial = serial.unwrap();
 
-            reporter.action("Streaming logs from serial port...");
-            reporter.action("==================================");
+            println!("Streaming logs from serial port...");
+            println!("==================================");
 
+            let mut buffer = String::new();
             let mut buf = [0; 128];
             while let Ok(bytes_read) = serial.read(&mut buf) {
-                print!("{}", String::from_utf8_lossy(&buf[..bytes_read]));
+                if bytes_read == 0 {
+                    break;
+                }
+
+                buffer += &String::from_utf8_lossy(&buf[..bytes_read]);
+
+                if let Some(i) = buffer.rfind('\n') {
+                    let (line, rest) = buffer.split_at(i + 1);
+                    let l = line.to_owned();
+                    buffer = rest.to_string();
+
+                    println!("{}", l);
+
+                    if l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
+                        reporter.error("I2C to IMU faulty");
+                        break;
+                    }
+
+                    if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
+                        reporter.success("I2C to IMU working");
+                        break;
+                    }
+                }
             }
 
             wait_for_next_board(&mut reporter);
