@@ -194,7 +194,7 @@ fn main() {
 
                     println!("{}", l);
 
-                    if l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
+                    if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") || l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
                         reporter.error("I2C to IMU faulty");
                         break;
                     }
