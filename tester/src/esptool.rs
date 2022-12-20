@@ -42,7 +42,7 @@ pub fn write_flash(
     rst_pin: &mut gpio::OutputPin,
     enable_flashing: &dyn Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
     reset_chip: &dyn Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
-) -> gpio::Result<()> {
+) -> gpio::Result<String> {
     enable_flashing(flash_pin, rst_pin)?;
 
     let c = process::Command::new("/usr/bin/python3")
@@ -71,5 +71,5 @@ pub fn write_flash(
 
     reset_chip(rst_pin)?;
 
-    Ok(())
+    Ok(output.clone().to_string())
 }

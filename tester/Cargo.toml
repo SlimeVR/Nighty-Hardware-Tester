@@ -10,6 +10,9 @@ colored = "2.0.0"
 crossterm = "0.25.0"
 embedded-hal = "0.2.7"
 nb = "1.0.0"
+reqwest = { version = "0.11.13", features = ["json", "blocking"] }
 rppal = { version = "0.13.1", features = ["hal"] }
 rusb = { version = "0.9.1", features = ["vendored"] }
+serde = { version = "1.0.151", features = ["derive"] }
 serialport = "4.2.0"
+uuid = { version = "1.2.2", features = ["v4"] }
