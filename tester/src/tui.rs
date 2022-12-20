@@ -107,15 +107,19 @@ impl Renderer {
 }
 
 impl Reporter {
-    pub fn success(&mut self, msg: impl ToString) {
+    pub fn success(&mut self, msg: &str) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::Success(msg.to_string())))
+            .send(Event::ReportEvent(ReportEvent::Success(
+                "✓ ".to_string() + msg,
+            )))
             .unwrap();
     }
 
-    pub fn error(&mut self, msg: impl ToString) {
+    pub fn error(&mut self, msg: &str) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::Error(msg.to_string())))
+            .send(Event::ReportEvent(ReportEvent::Error(
+                "╳ ".to_string() + msg,
+            )))
             .unwrap();
     }
 

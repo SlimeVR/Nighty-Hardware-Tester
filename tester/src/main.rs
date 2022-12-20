@@ -69,36 +69,36 @@ fn main() {
 
             reporter.reset();
 
-            reporter.success("✓ Device connected".to_string());
+            reporter.success("Device connected");
 
             let (vout, r3v3, bplus, err) = {
                 reporter.in_progress("Measuring VOUT...");
                 let vout_voltage = adc.measure(ChannelSelection::SingleA2).unwrap();
                 let vout_err = vout_voltage < 4.5 || vout_voltage > 5.2;
                 if vout_err {
-                    reporter.error(format!("╳ VOUT voltage: {}V (> 4.5V < 5.2V)", vout_voltage));
+                    reporter.error(&format!("VOUT voltage: {}V (> 4.5V < 5.2V)", vout_voltage));
                 } else {
-                    reporter.success(format!("✓ VOUT voltage: {}V", vout_voltage));
+                    reporter.success(&format!("VOUT voltage: {}V", vout_voltage));
                 }
 
                 reporter.in_progress("Measuring B+...");
                 let bplus_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
-                reporter.success(format!("▪️ B+ voltage: {}V", bplus_voltage));
+                reporter.success(&format!("B+ voltage: {}V", bplus_voltage));
 
                 reporter.in_progress("Measuring 3V3...");
                 let r3v3_voltage = adc.measure(ChannelSelection::SingleA0).unwrap();
                 let r3v3_err = r3v3_voltage < 2.8 || r3v3_voltage > 3.2;
                 if r3v3_err {
-                    reporter.error(format!("╳ 3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
+                    reporter.error(&format!("3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
                 } else {
-                    reporter.success(format!("✓ 3V3 voltage: {}V", r3v3_voltage));
+                    reporter.success(&format!("3V3 voltage: {}V", r3v3_voltage));
                 }
 
                 (vout_err, r3v3_err, bplus_voltage, vout_err || r3v3_err)
             };
 
             if err {
-                reporter.error("-> Faulty power circuit".to_string());
+                reporter.error("-> Faulty power circuit");
 
                 wait_for_next_board(&mut reporter);
                 continue;
@@ -115,12 +115,12 @@ fn main() {
                     Ok(mac) => {
                         // TODO: Check if we already have this MAC address in the database
 
-                        reporter.success(format!("✓ MAC: {}", mac));
+                        reporter.success(&format!("Read MAC address: {}", mac));
 
                         Ok(mac)
                     }
                     Err(e) => {
-                        reporter.error(format!("╳ MAC address: {}", e));
+                        reporter.error(&format!("Failed to read MAC address: {}", e));
 
                         Err(e)
                     }
@@ -130,7 +130,7 @@ fn main() {
             };
 
             if mac.is_err() {
-                reporter.error("-> ESP8266 faulty".to_string());
+                reporter.error("-> ESP8266 faulty");
 
                 wait_for_next_board(&mut reporter);
                 continue;
@@ -146,18 +146,18 @@ fn main() {
                     &reset_esp,
                 ) {
                     Ok(_) => {
-                        reporter.success("✓ Flashed".to_string());
+                        reporter.success("Flashed");
                         Ok(())
                     }
                     Err(e) => {
-                        reporter.error(format!("╳ Flashing: {}", e));
+                        reporter.error(&format!("Flashing: {}", e));
                         Err(e)
                     }
                 }
             };
 
             if flash.is_err() {
-                reporter.error("-> Flashing failed".to_string());
+                reporter.error("-> Flashing failed");
 
                 wait_for_next_board(&mut reporter);
                 continue;
@@ -169,7 +169,7 @@ fn main() {
                 .open();
 
             if serial.is_err() {
-                reporter.error("╳ Serial port: Could not open serial port".to_string());
+                reporter.error("Failed to read logs: could not open serial port");
                 continue;
             }
 
