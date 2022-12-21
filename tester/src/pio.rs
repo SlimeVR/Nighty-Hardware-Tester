@@ -1,14 +1,24 @@
-use std::{process, thread, time};
+use std::{io, process};
 
 use rppal::gpio;
 
 pub fn build(environment: &str) -> gpio::Result<()> {
-    process::Command::new("pio")
+    let c = process::Command::new("pio")
         .arg("run")
         .arg("-e")
         .arg(environment)
         .current_dir("/home/pi/slimevr-tracker-esp")
         .output()?;
+
+    let output = String::from_utf8_lossy(&c.stdout);
+    println!("{}", output);
+
+    if !c.status.success() {
+        return Err(gpio::Error::Io(io::Error::new(
+            io::ErrorKind::Other,
+            format!("`pio` exited with non-zero exit code: {output}"),
+        )));
+    }
 
     Ok(())
 }
@@ -19,10 +29,10 @@ pub fn flash(
     rst_pin: &mut gpio::OutputPin,
     enable_flashing: &dyn Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
     reset_chip: &dyn Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
-) -> gpio::Result<()> {
+) -> gpio::Result<String> {
     enable_flashing(flash_pin, rst_pin)?;
 
-    let s = process::Command::new("pio")
+    let c = process::Command::new("pio")
         .arg("run")
         .arg("-t")
         .arg("upload")
@@ -33,9 +43,17 @@ pub fn flash(
         .current_dir("/home/pi/slimevr-tracker-esp")
         .output()?;
 
-    thread::sleep(time::Duration::from_millis(100));
+    let output = String::from_utf8_lossy(&c.stdout);
+    println!("{}", output);
 
     reset_chip(rst_pin)?;
 
-    Ok(())
+    if !c.status.success() {
+        return Err(gpio::Error::Io(io::Error::new(
+            io::ErrorKind::Other,
+            format!("`pio` exited with non-zero exit code: {output}"),
+        )));
+    }
+
+    Ok(output.clone().to_string())
 }

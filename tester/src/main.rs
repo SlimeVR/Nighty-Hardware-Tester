@@ -5,7 +5,6 @@ use rppal::{
 };
 use std::{
     env,
-    fmt::format,
     sync::{Arc, Mutex},
     thread::{sleep, spawn},
     time::Duration,
@@ -353,7 +352,7 @@ fn main() {
                     if serial.is_err() {
                         reporter.error("Failed to read logs: could not open serial port");
 
-                        return Err::<String,String>(
+                        return Err::<String, String>(
                             "Failed to read logs: could not open serial port".to_string(),
                         );
                     }

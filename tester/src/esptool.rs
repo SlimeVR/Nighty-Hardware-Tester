@@ -1,4 +1,4 @@
-use std::{io, process, thread::sleep, time::Duration};
+use std::{io, process};
 
 use rppal::gpio;
 
@@ -17,8 +17,16 @@ pub fn read_mac_address(
         .output()?;
 
     let output = String::from_utf8_lossy(&c.stdout);
-
     println!("{}", output);
+
+    reset_chip(rst_pin)?;
+
+    if !c.status.success() {
+        return Err(gpio::Error::Io(io::Error::new(
+            io::ErrorKind::Other,
+            format!("`esptool` exited with non-zero exit code: {output}"),
+        )));
+    }
 
     let mac_address = output.lines().filter(|l| l.contains("MAC:")).nth(0);
     if mac_address.is_none() {
@@ -37,10 +45,6 @@ pub fn read_mac_address(
     }
 
     let mac_address = mac_address.unwrap();
-
-    reset_chip(rst_pin)?;
-
-    sleep(Duration::from_millis(500));
 
     Ok(mac_address.to_string())
 }
@@ -68,17 +72,22 @@ pub fn write_flash(
         .arg("921600")
         .arg("write_flash")
         .arg("-fm")
-        .arg("dio")
+        .arg("qio")
         .arg("0x0000")
         .arg(file)
         .output()?;
 
     let output = String::from_utf8_lossy(&c.stdout);
-
     println!("{}", output);
-    sleep(Duration::from_millis(200));
 
     reset_chip(rst_pin)?;
+
+    if !c.status.success() {
+        return Err(gpio::Error::Io(io::Error::new(
+            io::ErrorKind::Other,
+            format!("`esptool` exited with non-zero exit code: {output}"),
+        )));
+    }
 
     Ok(output.clone().to_string())
 }
