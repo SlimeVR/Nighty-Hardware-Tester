@@ -29,17 +29,25 @@ fn reset_esp(pin: &mut OutputPin) -> Result<()> {
 
     pin.set_high();
 
+    sleep(Duration::from_millis(200));
+
     Ok(())
 }
 
 fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
     flash_pin.set_low();
 
-    reset_esp(rst_pin)?;
+    rst_pin.set_low();
 
     sleep(Duration::from_millis(500));
 
+    rst_pin.set_high();
+
+    sleep(Duration::from_millis(100));
+
     flash_pin.set_high();
+
+    sleep(Duration::from_millis(200));
 
     Ok(())
 }
