@@ -51,6 +51,8 @@ struct Board {
 }
 
 fn main() {
+    let flash_with_pio = env::var("TESTER_FLASH_WITH_PIO").unwrap_or("0".to_string()) == "1";
+
     let t = tui::TUI::new().unwrap();
 
     let (mut renderer, mut reporter) = t.split();
@@ -58,9 +60,21 @@ fn main() {
 
     let reports_to_upload_clone = boards_to_upload.clone();
     spawn(move || {
+        if flash_with_pio {
+            reporter.in_progress("Skipping firmware build, flashing with PlatformIO...");
+            sleep(Duration::from_millis(500));
+            reporter.reset();
+        } else {
+            if env::var("TESTER_NO_BUILD").unwrap_or("0".to_string()) == "1" {
+                reporter.in_progress("Skipping firmware build, building disabled via env...");
+                sleep(Duration::from_millis(500));
+                reporter.reset();
+            } else {
         reporter.in_progress("Building firmware...");
         pio::build("esp12e").unwrap();
         reporter.reset();
+            }
+        }
 
         let i2c = I2c::with_bus(1).unwrap();
         let gpio = Gpio::new().unwrap();
@@ -307,13 +321,23 @@ fn main() {
 
             {
                 reporter.in_progress("Flashing...");
-                match esptool::write_flash(
+                match if flash_with_pio {
+                    pio::flash(
+                        "esp12e",
+                        &mut flash_pin,
+                        &mut rst_pin,
+                        &enable_flashing,
+                        &reset_esp,
+                    )
+                } else {
+                    esptool::write_flash(
                     "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
                     &mut flash_pin,
                     &mut rst_pin,
                     &enable_flashing,
                     &reset_esp,
-                ) {
+                    )
+                } {
                     Ok(logs) => {
                         board.values.push(TestReportValue::new(
                             false,
