@@ -1,4 +1,4 @@
-use std::{process, thread::sleep, time::Duration};
+use std::{io, process, thread::sleep, time::Duration};
 
 use rppal::gpio;
 
@@ -20,14 +20,23 @@ pub fn read_mac_address(
 
     println!("{}", output);
 
-    let mac_address = output
-        .lines()
-        .filter(|l| l.contains("MAC:"))
-        .nth(0)
-        .unwrap()
-        .split("MAC: ")
-        .nth(1)
-        .unwrap();
+    let mac_address = output.lines().filter(|l| l.contains("MAC:")).nth(0);
+    if mac_address.is_none() {
+        return Err(gpio::Error::Io(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "No MAC address found",
+        )));
+    }
+
+    let mac_address = mac_address.unwrap().split("MAC: ").nth(1);
+    if mac_address.is_none() {
+        return Err(gpio::Error::Io(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "No MAC address found",
+        )));
+    }
+
+    let mac_address = mac_address.unwrap();
 
     reset_chip(rst_pin)?;
 

@@ -55,13 +55,13 @@ fn main() {
     let t = tui::TUI::new().unwrap();
 
     let (mut renderer, mut reporter) = t.split();
-    let mut boards_to_upload: Arc<Mutex<Vec<Board>>> = Arc::new(Mutex::new(Vec::new()));
+    let boards_to_upload: Arc<Mutex<Vec<Board>>> = Arc::new(Mutex::new(Vec::new()));
 
     let reports_to_upload_clone = boards_to_upload.clone();
     spawn(move || {
         reporter.in_progress("Building firmware...");
         pio::build("esp12e").unwrap();
-        // reporter.reset();
+        reporter.reset();
 
         let i2c = I2c::with_bus(1).unwrap();
         let gpio = Gpio::new().unwrap();
@@ -86,60 +86,178 @@ fn main() {
 
                 usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
-                // reporter.reset();
+                reporter.reset();
             };
 
             sleep(Duration::from_millis(1000));
 
-            // reporter.reset();
+            reporter.reset();
 
             reporter.success("Device connected");
 
             let err = {
                 reporter.in_progress("Measuring VOUT...");
-                let vout_voltage = adc.measure(ChannelSelection::SingleA2).unwrap();
-                let vout_err = vout_voltage < 4.5 || vout_voltage > 5.2;
-                if vout_err {
-                    reporter.error(&format!("VOUT voltage: {}V (> 4.5V < 5.2V)", vout_voltage));
-                } else {
-                    reporter.success(&format!("VOUT voltage: {}V", vout_voltage));
-                }
-                board.values.push(TestReportValue::new(
-                    vout_err,
-                    "".to_string(),
-                    "4.5V > VOUT < 5.2V".to_string(),
-                    vout_voltage.to_string(),
-                ));
+                let vout_err = match adc.measure(ChannelSelection::SingleA2) {
+                    Ok(v) => {
+                        let vout_err = v < 4.5 || v > 5.2;
+                        if vout_err {
+                            reporter.error(&format!("VOUT voltage: {}V (> 4.5V < 5.2V)", v));
+                        } else {
+                            reporter.success(&format!("VOUT voltage: {}V", v));
+                        }
+                        board.values.push(TestReportValue::new(
+                            vout_err,
+                            "".to_string(),
+                            "4.5V > VOUT < 5.2V".to_string(),
+                            v.to_string(),
+                        ));
+
+                        vout_err
+                    }
+                    Err(e) => match e {
+                        nb::Error::WouldBlock => {
+                            board.values.push(TestReportValue::new(
+                                true,
+                                "err: would block".to_string(),
+                                "4.5V > VOUT < 5.2V".to_string(),
+                                "".to_string(),
+                            ));
+
+                            true
+                        }
+                        nb::Error::Other(e) => match e {
+                            ads1x1x::Error::I2C(e) => {
+                                board.values.push(TestReportValue::new(
+                                    true,
+                                    format!("err: i2c: {}", e),
+                                    "4.5V > VOUT < 5.2V".to_string(),
+                                    "".to_string(),
+                                ));
+
+                                true
+                            }
+                            ads1x1x::Error::InvalidInputData => {
+                                board.values.push(TestReportValue::new(
+                                    true,
+                                    "err: invalid channel".to_string(),
+                                    "4.5V > VOUT < 5.2V".to_string(),
+                                    "".to_string(),
+                                ));
+
+                                true
+                            }
+                        },
+                    },
+                };
 
                 reporter.in_progress("Measuring B+...");
-                let bplus_voltage = adc.measure(ChannelSelection::SingleA3).unwrap();
-                let bplus_err = bplus_voltage < 4.0;
-                if bplus_err {
-                    reporter.error(&format!("B+ voltage: {}V (> 4.0V)", bplus_voltage));
-                } else {
-                    reporter.success(&format!("B+ voltage: {}V", bplus_voltage));
-                }
-                board.values.push(TestReportValue::new(
-                    bplus_err,
-                    "".to_string(),
-                    "4.0V > B+".to_string(),
-                    bplus_voltage.to_string(),
-                ));
+                let bplus_err = match adc.measure(ChannelSelection::SingleA3) {
+                    Ok(v) => {
+                        let bplus_err = v < 4.0;
+                        if bplus_err {
+                            reporter.error(&format!("B+ voltage: {}V (> 4.0V)", v));
+                        } else {
+                            reporter.success(&format!("B+ voltage: {}V", v));
+                        }
+
+                        board.values.push(TestReportValue::new(
+                            bplus_err,
+                            "".to_string(),
+                            "4.0V < B+".to_string(),
+                            v.to_string(),
+                        ));
+
+                        bplus_err
+                    }
+                    Err(e) => match e {
+                        nb::Error::WouldBlock => {
+                            board.values.push(TestReportValue::new(
+                                true,
+                                "err: would block".to_string(),
+                                "4.0V < B+".to_string(),
+                                "".to_string(),
+                            ));
+
+                            true
+                        }
+                        nb::Error::Other(e) => match e {
+                            ads1x1x::Error::I2C(e) => {
+                                board.values.push(TestReportValue::new(
+                                    true,
+                                    format!("err: i2c: {}", e),
+                                    "4.0V < B+".to_string(),
+                                    "".to_string(),
+                                ));
+
+                                true
+                            }
+                            ads1x1x::Error::InvalidInputData => {
+                                board.values.push(TestReportValue::new(
+                                    true,
+                                    "err: invalid channel".to_string(),
+                                    "4.0V < B+".to_string(),
+                                    "".to_string(),
+                                ));
+
+                                true
+                            }
+                        },
+                    },
+                };
 
                 reporter.in_progress("Measuring 3V3...");
-                let r3v3_voltage = adc.measure(ChannelSelection::SingleA0).unwrap();
-                let r3v3_err = r3v3_voltage < 2.8 || r3v3_voltage > 3.2;
-                if r3v3_err {
-                    reporter.error(&format!("3V3 voltage: {}V (> 2.8V < 3.2V)", r3v3_voltage));
-                } else {
-                    reporter.success(&format!("3V3 voltage: {}V", r3v3_voltage));
-                }
-                board.values.push(TestReportValue::new(
-                    r3v3_err,
-                    "".to_string(),
-                    "2.8V > 3V3 < 3.2V".to_string(),
-                    r3v3_voltage.to_string(),
-                ));
+                let r3v3_err = match adc.measure(ChannelSelection::SingleA0) {
+                    Ok(v) => {
+                        let r3v3_err = v < 2.8 || v > 3.2;
+                        if r3v3_err {
+                            reporter.error(&format!("3V3 voltage: {}V (> 2.8V < 3.2V)", v));
+                        } else {
+                            reporter.success(&format!("3V3 voltage: {}V", v));
+                        }
+                        board.values.push(TestReportValue::new(
+                            r3v3_err,
+                            "".to_string(),
+                            "2.8V > 3V3 < 3.2V".to_string(),
+                            v.to_string(),
+                        ));
+
+                        r3v3_err
+                    }
+                    Err(e) => match e {
+                        nb::Error::WouldBlock => {
+                            board.values.push(TestReportValue::new(
+                                true,
+                                "err: would block".to_string(),
+                                "2.8V > 3V3 < 3.2V".to_string(),
+                                "".to_string(),
+                            ));
+
+                            true
+                        }
+                        nb::Error::Other(e) => match e {
+                            ads1x1x::Error::I2C(e) => {
+                                board.values.push(TestReportValue::new(
+                                    true,
+                                    format!("err: i2c: {}", e),
+                                    "2.8V > 3V3 < 3.2V".to_string(),
+                                    "".to_string(),
+                                ));
+
+                                true
+                            }
+                            ads1x1x::Error::InvalidInputData => {
+                                board.values.push(TestReportValue::new(
+                                    true,
+                                    "err: invalid channel".to_string(),
+                                    "2.8V > 3V3 < 3.2V".to_string(),
+                                    "".to_string(),
+                                ));
+
+                                true
+                            }
+                        },
+                    },
+                };
 
                 vout_err || bplus_err || r3v3_err
             };
@@ -226,55 +344,62 @@ fn main() {
             };
 
             {
-                let serial = serialport::new("/dev/ttyUSB0", 115200)
-                    .timeout(Duration::from_millis(10000))
-                    .data_bits(serialport::DataBits::Seven)
-                    .open();
+                let err = {
+                    let serial = serialport::new("/dev/ttyUSB0", 115200)
+                        .timeout(Duration::from_millis(10000))
+                        .data_bits(serialport::DataBits::Seven)
+                        .open();
 
-                if serial.is_err() {
-                    reporter.error("Failed to read logs: could not open serial port");
-                    continue;
-                }
+                    if serial.is_err() {
+                        reporter.error("Failed to read logs: could not open serial port");
 
-                let mut serial = serial.unwrap();
-
-                println!("Streaming logs from serial port...");
-                println!("==================================");
-
-                let mut buffer = String::new();
-                let mut buf = [0; 128];
-                let i2c_logs = loop {
-                    let Ok( bytes_read) = serial.read(&mut buf) else {
-                        break Err("Failed to read logs: could not read from serial port".to_string());
-                    };
-
-                    if bytes_read == 0 {
-                        continue;
+                        return Err::<String,String>(
+                            "Failed to read logs: could not open serial port".to_string(),
+                        );
                     }
 
-                    buffer += &String::from_utf8_lossy(&buf[..bytes_read]);
-                    let logs = buffer.clone();
+                    let mut serial = serial.unwrap();
 
-                    if let Some(i) = buffer.rfind('\n') {
-                        let (line, rest) = buffer.split_at(i + 1);
-                        let l = line.to_owned();
-                        buffer = rest.to_string();
+                    println!("Streaming logs from serial port...");
+                    println!("==================================");
 
-                        println!("{}", l);
+                    let mut buffer = String::new();
+                    let mut buf = [0; 128];
+                    let i2c_logs = loop {
+                        let Ok( bytes_read) = serial.read(&mut buf) else {
+                            break Err("Failed to read logs: could not read from serial port".to_string());
+                        };
 
-                        if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") || l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
+                        if bytes_read == 0 {
+                            continue;
+                        }
+
+                        buffer += &String::from_utf8_lossy(&buf[..bytes_read]);
+                        let logs = buffer.clone();
+
+                        if let Some(i) = buffer.rfind('\n') {
+                            let (line, rest) = buffer.split_at(i + 1);
+                            let l = line.to_owned();
+                            buffer = rest.to_string();
+
+                            println!("{}", l);
+
+                            if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") || l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
                             reporter.error("I2C to IMU faulty");
                             break Err(logs);
                         }
 
-                        if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
-                            reporter.success("I2C to IMU working");
-                            break Ok(logs);
+                            if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
+                                reporter.success("I2C to IMU working");
+                                break Ok(logs);
+                            }
                         }
-                    }
+                    };
+
+                    i2c_logs
                 };
 
-                match i2c_logs {
+                match err {
                     Ok(logs) => {
                         board.values.push(TestReportValue::new(
                             false,
