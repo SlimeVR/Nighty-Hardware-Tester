@@ -68,6 +68,21 @@ fn main() {
 
     let reports_to_upload_clone = boards_to_upload.clone();
     spawn(move || {
+        let reports_to_upload = reports_to_upload_clone;
+
+        let wait_for_next_board = |reporter: &mut tui::Reporter, board: Board| {
+            {
+                let mut reports = reports_to_upload.lock().unwrap();
+                reports.push(board);
+            }
+
+            reporter.action("[ Please disconnect the device ]".to_string());
+
+            usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
+
+            reporter.reset();
+        };
+
         if flash_with_pio {
             reporter.in_progress("Skipping firmware build, flashing with PlatformIO...");
             sleep(Duration::from_millis(500));
@@ -101,14 +116,6 @@ fn main() {
             reporter.action("[ Please connect the device ]".to_string());
 
             usb::wait_until_device_is_connected(USB_VENDOR_ID, USB_PRODUCT_ID);
-
-            let wait_for_next_board = |reporter: &mut tui::Reporter| {
-                reporter.action("[ Please disconnect the device ]".to_string());
-
-                usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
-
-                reporter.reset();
-            };
 
             sleep(Duration::from_millis(1000));
 
@@ -272,7 +279,7 @@ fn main() {
             if err {
                 reporter.error("-> Faulty power circuit");
 
-                wait_for_next_board(&mut reporter);
+                wait_for_next_board(&mut reporter, board);
                 continue;
             }
 
@@ -306,7 +313,7 @@ fn main() {
                         reporter.error(&format!("Failed to read MAC address: {}", e));
                         reporter.error("-> ESP8266 faulty");
 
-                        wait_for_next_board(&mut reporter);
+                        wait_for_next_board(&mut reporter, board);
 
                         continue;
                     }
@@ -353,7 +360,7 @@ fn main() {
                         reporter.error(&format!("Flashing: {}", e));
                         reporter.error("-> Flashing failed");
 
-                        wait_for_next_board(&mut reporter);
+                        wait_for_next_board(&mut reporter, board);
 
                         continue;
                     }
@@ -435,21 +442,16 @@ fn main() {
                             "false".to_string(),
                         ));
 
-                        wait_for_next_board(&mut reporter);
+                        wait_for_next_board(&mut reporter, board);
 
                         continue;
                     }
                 };
             }
 
-            {
-                let mut reports = reports_to_upload_clone.lock().unwrap();
-                reports.push(board);
-            }
-
             reporter.success("Board tested successfully");
 
-            wait_for_next_board(&mut reporter);
+            wait_for_next_board(&mut reporter, board);
         }
     });
 
