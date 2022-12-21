@@ -70,9 +70,9 @@ fn main() {
                 sleep(Duration::from_millis(500));
                 reporter.reset();
             } else {
-        reporter.in_progress("Building firmware...");
-        pio::build("esp12e").unwrap();
-        reporter.reset();
+                reporter.in_progress("Building firmware...");
+                pio::build("esp12e").unwrap();
+                reporter.reset();
             }
         }
 
@@ -110,44 +110,32 @@ fn main() {
 
             let err = {
                 reporter.in_progress("Measuring VOUT...");
-                let vout_err = match adc.measure(ChannelSelection::SingleA2) {
+                match adc.measure(ChannelSelection::SingleA2) {
                     Ok(v) => {
-                        let vout_err = v < 4.5 || v > 5.2;
-                        if vout_err {
-                            reporter.error(&format!("VOUT voltage: {}V (> 4.5V < 5.2V)", v));
-                        } else {
-                            reporter.success(&format!("VOUT voltage: {}V", v));
-                        }
                         board.values.push(TestReportValue::new(
-                            vout_err,
+                            true,
                             "".to_string(),
-                            "4.5V > VOUT < 5.2V".to_string(),
+                            "".to_string(),
                             v.to_string(),
                         ));
-
-                        vout_err
                     }
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
                             board.values.push(TestReportValue::new(
                                 true,
                                 "err: would block".to_string(),
-                                "4.5V > VOUT < 5.2V".to_string(),
+                                "".to_string(),
                                 "".to_string(),
                             ));
-
-                            true
                         }
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
                                 board.values.push(TestReportValue::new(
                                     true,
                                     format!("err: i2c: {}", e),
-                                    "4.5V > VOUT < 5.2V".to_string(),
+                                    "".to_string(),
                                     "".to_string(),
                                 ));
-
-                                true
                             }
                             ads1x1x::Error::InvalidInputData => {
                                 board.values.push(TestReportValue::new(
@@ -156,8 +144,6 @@ fn main() {
                                     "4.5V > VOUT < 5.2V".to_string(),
                                     "".to_string(),
                                 ));
-
-                                true
                             }
                         },
                     },
@@ -272,7 +258,7 @@ fn main() {
                     },
                 };
 
-                vout_err || bplus_err || r3v3_err
+                bplus_err || r3v3_err
             };
 
             if err {
@@ -331,11 +317,11 @@ fn main() {
                     )
                 } else {
                     esptool::write_flash(
-                    "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
-                    &mut flash_pin,
-                    &mut rst_pin,
-                    &enable_flashing,
-                    &reset_esp,
+                        "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
+                        &mut flash_pin,
+                        &mut rst_pin,
+                        &enable_flashing,
+                        &reset_esp,
                     )
                 } {
                     Ok(logs) => {
