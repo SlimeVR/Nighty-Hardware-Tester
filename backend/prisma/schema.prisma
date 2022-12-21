@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model TestReport {
+  id     String             @id @unique
+  type   String
+  values TestReportValue[]
+
+  testedAt DateTime @default(now())
+
+  @@index([type, id])
+}
+
+model TestReportValue {
+  id        String  @id @unique @default(cuid())
+  failed    Boolean
+  condition String
+  value     String
+  message   String
+
+  testReport   TestReport? @relation(fields: [testReportId], references: [id])
+  testReportId String?
+}

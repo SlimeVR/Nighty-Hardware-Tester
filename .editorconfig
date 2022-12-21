@@ -13,3 +13,6 @@ insert_final_newline = true
 
 [*.{md,yml}]
 indent_size = 2
+
+[*.tsx]
+indent_size = 4

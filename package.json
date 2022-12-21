@@ -1,0 +1,14 @@
+{
+    "name": "@slimevr/testing-jig",
+    "version": "0.0.0",
+    "private": true,
+    "description": "A testing jig for the SlimeVR tracking system",
+    "scripts": {
+        "backend:docker:build": "cd backend && docker build -t slimevr/testing-jig-backend .",
+        "backend:docker-compose:up": "cd backend && docker compose -f docker-compose.yml up -d",
+        "backend:docker-compose:prod:up": "cd backend && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d",
+        "backend:docker-compose:prod:logs": "cd backend && docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f",
+        "tester:build": "cross build --target aarch64-unknown-linux-gnu",
+        "tester:build:release": "cross build --target aarch64-unknown-linux-gnu --release"
+    }
+}

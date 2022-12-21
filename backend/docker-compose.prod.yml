@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  db:
+    environment:
+      - POSTGRES_PASSWORD=postgres
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+    ports:
+      - "3000:3000"
