@@ -60,6 +60,8 @@ struct Board {
 
 fn main() {
     let flash_with_pio = env::var("TESTER_FLASH_WITH_PIO").unwrap_or("0".to_string()) == "1";
+    let rpc_url = env::var("TESTER_RPC_URL").unwrap();
+    let rpc_password = env::var("TESTER_RPC_PASSWORD").unwrap();
 
     let t = tui::TUI::new().unwrap();
 
@@ -476,8 +478,8 @@ fn main() {
 
             let client = reqwest::blocking::Client::new();
             match client
-                .post("http://172.30.0.97:3000/api/rpc")
-                .header("authorization", env::var("RPC_PASSWORD").unwrap())
+                .post(&rpc_url)
+                .header("authorization", &rpc_password)
                 .json(&body)
                 .send()
             {
