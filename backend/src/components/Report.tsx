@@ -28,7 +28,7 @@ const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
                 )}
               </div>
             </Disclosure.Button>
-            <Disclosure.Panel className="p-2 pt-0 space-y-1">
+            <Disclosure.Panel className="space-y-1 p-2 pt-0">
               <div className="flex gap-2">
                 <span className="py-1">Condition:</span>
                 <Chip text={value.condition} monospace />
@@ -37,6 +37,12 @@ const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
                 <span className="py-1">Value:</span>
                 <Chip text={value.value} preformatted monospace />
               </div>
+              {value.logs && (
+                <div className="flex gap-2">
+                  <span className="py-1">Logs:</span>
+                  <Chip text={value.logs} preformatted monospace />
+                </div>
+              )}
             </Disclosure.Panel>
           </>
         )}
