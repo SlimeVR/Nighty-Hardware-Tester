@@ -17,12 +17,17 @@ const Home: NextPage = () => {
   }
 
   return (
-    <div className="flex flex-wrap gap-4">
+    <div className="flex flex-col gap-2">
       {reports.map((report) => (
         <ReportComponent report={report} key={report.id} />
       ))}
     </div>
   );
+
+  // return (
+  //   <div className="flex flex-wrap gap-4">
+  //   </div>
+  // );
 };
 
 export default Home;

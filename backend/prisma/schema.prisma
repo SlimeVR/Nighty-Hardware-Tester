@@ -8,7 +8,7 @@ datasource db {
 }
 
 model TestReport {
-  id     String             @id @unique
+  id     String            @id @unique
   type   String
   values TestReportValue[]
 
@@ -18,11 +18,14 @@ model TestReport {
 }
 
 model TestReportValue {
-  id        String  @id @unique @default(cuid())
-  failed    Boolean
+  id        String @id @unique @default(cuid())
+  step      String @map("message")
   condition String
   value     String
-  message   String
+
+  logs String?
+
+  failed Boolean
 
   testReport   TestReport? @relation(fields: [testReportId], references: [id])
   testReportId String?

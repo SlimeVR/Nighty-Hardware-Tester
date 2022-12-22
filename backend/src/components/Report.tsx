@@ -1,51 +1,86 @@
+import { Disclosure } from "@headlessui/react";
 import clsx from "clsx";
 import { FC } from "react";
+import { HiChevronDown, HiChevronUp } from "react-icons/hi2";
 import { TestReportDto, TestReportValueDto } from "../server/dtos/helper";
 import { Chip } from "./Chip";
 
 const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
   return (
-    <li
-      key={value.id}
+    <div
       className={clsx(
-        "rounded-lg border-l-4 bg-transparent px-2 py-1 backdrop-brightness-150 space-y-1",
+        "space-y-1 rounded-lg border-l-4 bg-transparent backdrop-brightness-150",
         value.failed ? "border-l-red-600" : "border-l-green-600"
       )}
+      key={value.id}
     >
-      <p>Message: {value.message}</p>
-      <p>
-        Condition: <Chip text={value.condition} />
-      </p>
-      <p>
-        Value: <Chip text={value.value} />
-      </p>
-    </li>
+      <Disclosure>
+        {({ open }) => (
+          <>
+            <Disclosure.Button className="flex w-full justify-between p-2">
+              <div className="w-fit self-start">{value.step}</div>
+
+              <div className="w-fit self-center">
+                {open ? (
+                  <HiChevronUp className="text-white" />
+                ) : (
+                  <HiChevronDown className="text-white" />
+                )}
+              </div>
+            </Disclosure.Button>
+            <Disclosure.Panel className="p-2 pt-0 space-y-1">
+              <div className="flex gap-2">
+                <span className="py-1">Condition:</span>
+                <Chip text={value.condition} monospace />
+              </div>
+              <div className="flex gap-2">
+                <span className="py-1">Value:</span>
+                <Chip text={value.value} preformatted monospace />
+              </div>
+            </Disclosure.Panel>
+          </>
+        )}
+      </Disclosure>
+    </div>
   );
 };
 
 export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
   return (
     <div
+      className="space-y-1 rounded-lg border border-gray-800 bg-card"
       key={report.id}
-      className="w-4/12-without-gap space-y-1 rounded-lg border border-gray-800 bg-card p-3"
     >
-      <p>
-        <span className="mr-1">ID:</span>
-        <Chip text={report.id} />
-      </p>
+      <Disclosure>
+        {({ open }) => (
+          <>
+            <Disclosure.Button className="flex w-full justify-between p-2">
+              <div className="w-fit self-start">
+                <Chip text={report.id} monospace />
+              </div>
 
-      <p>
-        <span>Values:</span>
-        {report.values.length ? (
-          <ul className="mt-1 flex flex-col gap-2">
-            {report.values.map((error) => (
-              <ValueComponent value={error} key={error.id} />
-            ))}
-          </ul>
-        ) : (
-          <span className="ml-1 text-yellow-400">No values</span>
+              <div className="w-fit self-center">
+                {open ? (
+                  <HiChevronUp className="text-white" />
+                ) : (
+                  <HiChevronDown className="text-white" />
+                )}
+              </div>
+            </Disclosure.Button>
+            <Disclosure.Panel className="p-2 pt-0">
+              {report.values.length ? (
+                <ul className="mt-1 flex flex-col gap-2">
+                  {report.values.map((value) => (
+                    <ValueComponent value={value} key={value.id} />
+                  ))}
+                </ul>
+              ) : (
+                <span className="ml-1 text-yellow-400">No values</span>
+              )}
+            </Disclosure.Panel>
+          </>
         )}
-      </p>
+      </Disclosure>
     </div>
   );
 };

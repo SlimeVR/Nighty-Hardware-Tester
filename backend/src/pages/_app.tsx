@@ -4,7 +4,7 @@ import { trpc } from "../utils/trpc";
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   return (
-    <div className="bg-bg text-white min-h-full p-2">
+    <div className="min-h-full bg-bg p-2 text-white overflow-y-scroll">
       <Component {...pageProps} />
     </div>
   );

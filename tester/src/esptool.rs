@@ -2,12 +2,17 @@ use std::{io, process};
 
 use rppal::gpio;
 
+pub struct ReadMacAddressResult {
+    pub mac: String,
+    pub log: String,
+}
+
 pub fn read_mac_address(
     flash_pin: &mut gpio::OutputPin,
     rst_pin: &mut gpio::OutputPin,
     enable_flashing: &dyn Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
     reset_chip: &dyn Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
-) -> gpio::Result<String> {
+) -> gpio::Result<ReadMacAddressResult> {
     enable_flashing(flash_pin, rst_pin)?;
 
     let c = process::Command::new("esptool")
@@ -46,7 +51,10 @@ pub fn read_mac_address(
 
     let mac_address = mac_address.unwrap();
 
-    Ok(mac_address.to_string())
+    Ok(ReadMacAddressResult {
+        mac: mac_address.to_string(),
+        log: output.clone().to_string(),
+    })
 }
 
 pub fn write_flash(

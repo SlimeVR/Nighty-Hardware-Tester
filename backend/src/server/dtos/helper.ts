@@ -2,19 +2,24 @@ import { TestReport, TestReportValue } from "@prisma/client";
 import { z } from "zod";
 
 export const TestReportValueValidator = z.object({
-  id: z.string(),
-  failed: z.boolean(),
+  step: z.string(),
   condition: z.string(),
   value: z.string(),
-  message: z.string(),
+  failed: z.boolean(),
+  logs: z.string().nullable(),
 });
-export type TestReportValueDto = z.infer<typeof TestReportValueValidator>;
-export const TestReportValueToDto = (value: TestReportValue) => ({
+export type TestReportValueDto = z.infer<typeof TestReportValueValidator> & {
+  id: string;
+};
+export const TestReportValueToDto = (
+  value: TestReportValue
+): TestReportValueDto => ({
   id: value.id,
-  failed: value.failed,
+  step: value.step,
   condition: value.condition,
   value: value.value,
-  message: value.message,
+  failed: value.failed,
+  logs: value.logs,
 });
 
 export const TestReportValidator = z.object({
@@ -22,10 +27,15 @@ export const TestReportValidator = z.object({
   type: z.string(),
   values: z.array(TestReportValueValidator),
 });
-export type TestReportDto = z.infer<typeof TestReportValidator>;
+export type TestReportDto = Omit<
+  z.infer<typeof TestReportValidator>,
+  "values"
+> & {
+  values: TestReportValueDto[];
+};
 export const TestReportToDto = (
   report: TestReport & { values: TestReportValue[] }
-) => ({
+): TestReportDto => ({
   id: report.id,
   type: report.type,
   values: report.values.map(TestReportValueToDto),

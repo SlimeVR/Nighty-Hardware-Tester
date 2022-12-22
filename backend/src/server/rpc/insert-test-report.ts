@@ -24,11 +24,10 @@ export const handleInsertTestReportRPC = async (
         values: {
           createMany: {
             data: params.values.map((value) => ({
-              id: value.id,
+              step: value.step,
               failed: value.failed,
               condition: value.condition,
               value: value.value,
-              message: value.message,
             })),
           },
         },

@@ -10,6 +10,7 @@
     "start": "yarn prisma migrate deploy && yarn next start"
   },
   "dependencies": {
+    "@headlessui/react": "^1.7.7",
     "@prisma/client": "^4.7.1",
     "@tanstack/react-query": "^4.10.0",
     "@trpc/client": "10.0.0-proxy-beta.17",
@@ -20,6 +21,7 @@
     "next": "12.3.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-icons": "^4.7.1",
     "superjson": "1.9.1",
     "zod": "^3.18.0"
   },

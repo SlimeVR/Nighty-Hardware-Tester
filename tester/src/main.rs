@@ -15,7 +15,8 @@ use tester::{
         ApiRequestBody, ApiRequestBodyParams::ApiRequestBodyInsertTestReport, TestReport,
         TestReportValue,
     },
-    esptool, pio, tui, usb,
+    esptool::{self, ReadMacAddressResult},
+    pio, tui, usb,
 };
 use uuid::Uuid;
 
@@ -129,36 +130,40 @@ fn main() {
                 match adc.measure(ChannelSelection::SingleA2) {
                     Ok(v) => {
                         board.values.push(TestReportValue::new(
-                            true,
-                            "".to_string(),
-                            "".to_string(),
-                            v.to_string(),
+                            "Measure VOUT",
+                            "none",
+                            v,
+                            None::<&str>,
+                            false,
                         ));
                     }
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
                             board.values.push(TestReportValue::new(
-                                true,
-                                "err: would block".to_string(),
-                                "".to_string(),
-                                "".to_string(),
+                                "Measure VOUT",
+                                "none",
+                                "N/A",
+                                Some("err: would block"),
+                                false,
                             ));
                         }
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
                                 board.values.push(TestReportValue::new(
-                                    true,
-                                    format!("err: i2c: {}", e),
-                                    "".to_string(),
-                                    "".to_string(),
+                                    "Measure VOUT",
+                                    "none",
+                                    "N/A",
+                                    Some(&format!("err: i2c: {}", e)),
+                                    false,
                                 ));
                             }
                             ads1x1x::Error::InvalidInputData => {
                                 board.values.push(TestReportValue::new(
-                                    true,
-                                    "err: invalid channel".to_string(),
-                                    "4.5V > VOUT < 5.2V".to_string(),
-                                    "".to_string(),
+                                    "Measure VOUT",
+                                    "none",
+                                    "N/A",
+                                    Some("err: invalid input data"),
+                                    false,
                                 ));
                             }
                         },
@@ -176,10 +181,11 @@ fn main() {
                         }
 
                         board.values.push(TestReportValue::new(
+                            "Measure B+",
+                            "B+ > 4.0V",
+                            v,
+                            None::<&str>,
                             bplus_err,
-                            "".to_string(),
-                            "4.0V < B+".to_string(),
-                            v.to_string(),
                         ));
 
                         bplus_err
@@ -187,10 +193,11 @@ fn main() {
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
                             board.values.push(TestReportValue::new(
+                                "Measure B+",
+                                "B+ > 4.0V",
+                                "N/A",
+                                Some("err: would block"),
                                 true,
-                                "err: would block".to_string(),
-                                "4.0V < B+".to_string(),
-                                "".to_string(),
                             ));
 
                             true
@@ -198,20 +205,22 @@ fn main() {
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
                                 board.values.push(TestReportValue::new(
+                                    "Measure B+",
+                                    "B+ > 4.0V",
+                                    "N/A",
+                                    Some(&format!("err: i2c: {}", e)),
                                     true,
-                                    format!("err: i2c: {}", e),
-                                    "4.0V < B+".to_string(),
-                                    "".to_string(),
                                 ));
 
                                 true
                             }
                             ads1x1x::Error::InvalidInputData => {
                                 board.values.push(TestReportValue::new(
+                                    "Measure B+",
+                                    "B+ > 4.0V",
+                                    "N/A",
+                                    Some("err: invalid input data"),
                                     true,
-                                    "err: invalid channel".to_string(),
-                                    "4.0V < B+".to_string(),
-                                    "".to_string(),
                                 ));
 
                                 true
@@ -229,11 +238,13 @@ fn main() {
                         } else {
                             reporter.success(&format!("3V3 voltage: {}V", v));
                         }
+
                         board.values.push(TestReportValue::new(
+                            "Measure 3V3",
+                            "2.8V > 3V3 < 3.2V",
+                            v,
+                            None::<&str>,
                             r3v3_err,
-                            "".to_string(),
-                            "2.8V > 3V3 < 3.2V".to_string(),
-                            v.to_string(),
                         ));
 
                         r3v3_err
@@ -241,10 +252,11 @@ fn main() {
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
                             board.values.push(TestReportValue::new(
+                                "Measure 3V3",
+                                "2.8V > 3V3 < 3.2V",
+                                "N/A",
+                                Some("err: would block"),
                                 true,
-                                "err: would block".to_string(),
-                                "2.8V > 3V3 < 3.2V".to_string(),
-                                "".to_string(),
                             ));
 
                             true
@@ -252,20 +264,22 @@ fn main() {
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
                                 board.values.push(TestReportValue::new(
+                                    "Measure 3V3",
+                                    "2.8V > 3V3 < 3.2V",
+                                    "N/A",
+                                    Some(&format!("err: i2c: {}", e)),
                                     true,
-                                    format!("err: i2c: {}", e),
-                                    "2.8V > 3V3 < 3.2V".to_string(),
-                                    "".to_string(),
                                 ));
 
                                 true
                             }
                             ads1x1x::Error::InvalidInputData => {
                                 board.values.push(TestReportValue::new(
+                                    "Measure 3V3",
+                                    "2.8V > 3V3 < 3.2V",
+                                    "N/A",
+                                    Some("err: invalid input data"),
                                     true,
-                                    "err: invalid channel".to_string(),
-                                    "2.8V > 3V3 < 3.2V".to_string(),
-                                    "".to_string(),
                                 ));
 
                                 true
@@ -292,23 +306,25 @@ fn main() {
                     &enable_flashing,
                     &reset_esp,
                 ) {
-                    Ok(mac) => {
-                        board.values.push(TestReportValue::new(
-                            false,
-                            "MAC address can be read".to_string(),
-                            "!!mac_adress".to_string(),
-                            mac.clone(),
-                        ));
+                    Ok(ReadMacAddressResult { mac, log }) => {
                         board.mac = Some(mac.clone());
+                        board.values.push(TestReportValue::new(
+                            "Read MAC address",
+                            "MAC address should be readable",
+                            mac.clone(),
+                            Some(log),
+                            false,
+                        ));
 
                         reporter.success(&format!("Read MAC address: {}", mac));
                     }
                     Err(e) => {
                         board.values.push(TestReportValue::new(
+                            "Read MAC address",
+                            "MAC address should be readable",
+                            "N/A",
+                            Some(e.to_string()),
                             true,
-                            e.to_string(),
-                            "!!mac_adress".to_string(),
-                            "N/A".to_string(),
                         ));
 
                         reporter.error(&format!("Failed to read MAC address: {}", e));
@@ -342,20 +358,22 @@ fn main() {
                 } {
                     Ok(logs) => {
                         board.values.push(TestReportValue::new(
+                            "Flashing",
+                            "Flashing should work",
+                            true,
+                            Some(logs),
                             false,
-                            logs,
-                            "!!flashing".to_string(),
-                            "true".to_string(),
                         ));
 
                         reporter.success("Flashed");
                     }
                     Err(e) => {
                         board.values.push(TestReportValue::new(
+                            "Flashing",
+                            "Flashing should work",
+                            false,
+                            Some(e.to_string()),
                             true,
-                            e.to_string(),
-                            "!!flashing".to_string(),
-                            "false".to_string(),
                         ));
 
                         reporter.error(&format!("Flashing: {}", e));
@@ -388,6 +406,7 @@ fn main() {
                     println!("Streaming logs from serial port...");
                     println!("==================================");
 
+                    let mut full_logs = String::new();
                     let mut buffer = String::new();
                     let mut buf = [0; 128];
                     let i2c_logs = loop {
@@ -399,9 +418,11 @@ fn main() {
                             continue;
                         }
 
-                        buffer +=
-                            &String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
-                        let logs = buffer.clone();
+                        let str =
+                            String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
+
+                        full_logs += &str;
+                        buffer += &str;
 
                         if let Some(i) = buffer.rfind('\n') {
                             let (line, rest) = buffer.split_at(i + 1);
@@ -411,13 +432,13 @@ fn main() {
                             println!("{}", l);
 
                             if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") || l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
-                            reporter.error("I2C to IMU faulty");
-                            break Err(logs);
-                        }
+                                reporter.error("I2C to IMU faulty");
+                                break Err(full_logs);
+                            }
 
                             if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
                                 reporter.success("I2C to IMU working");
-                                break Ok(logs);
+                                break Ok(full_logs);
                             }
                         }
                     };
@@ -428,20 +449,22 @@ fn main() {
                 match err {
                     Ok(logs) => {
                         board.values.push(TestReportValue::new(
+                            "I2C to IMU",
+                            "I2C to IMU should work",
+                            true,
+                            Some(logs),
                             false,
-                            logs,
-                            "!!i2c".to_string(),
-                            "true".to_string(),
                         ));
                     }
                     Err(logs) => {
                         reporter.error(&logs);
 
                         board.values.push(TestReportValue::new(
+                            "I2C to IMU",
+                            "I2C to IMU should work",
+                            false,
+                            Some(logs),
                             true,
-                            logs,
-                            "!!i2c".to_string(),
-                            "false".to_string(),
                         ));
 
                         wait_for_next_board(&mut reporter, board);

@@ -24,20 +24,28 @@ pub struct TestReport {
 #[derive(Serialize, Clone)]
 pub struct TestReportValue {
     pub id: String,
-    pub failed: bool,
-    pub message: String,
+    pub step: String,
     pub condition: String,
     pub value: String,
+    pub logs: Option<String>,
+    pub failed: bool,
 }
 
 impl TestReportValue {
-    pub fn new(failed: bool, message: String, condition: String, value: String) -> TestReportValue {
+    pub fn new(
+        step: impl ToString,
+        condition: impl ToString,
+        value: impl ToString,
+        logs: Option<impl ToString>,
+        failed: bool,
+    ) -> TestReportValue {
         TestReportValue {
             id: Uuid::new_v4().to_string(),
+            step: step.to_string(),
+            condition: condition.to_string(),
+            value: value.to_string(),
+            logs: logs.map(|x| x.to_string()),
             failed,
-            message,
-            condition,
-            value,
         }
     }
 }
