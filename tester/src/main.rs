@@ -400,7 +400,8 @@ fn main() {
                             continue;
                         }
 
-                        buffer += &String::from_utf8_lossy(&buf[..bytes_read]);
+                        buffer +=
+                            &String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
                         let logs = buffer.clone();
 
                         if let Some(i) = buffer.rfind('\n') {
