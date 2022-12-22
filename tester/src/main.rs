@@ -126,7 +126,6 @@ fn main() {
             reporter.success("Device connected");
 
             let err = {
-                reporter.in_progress("Measuring VOUT...");
                 match adc.measure(ChannelSelection::SingleA2) {
                     Ok(v) => {
                         board.values.push(TestReportValue::new(
