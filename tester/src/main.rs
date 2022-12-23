@@ -3,8 +3,11 @@ use rppal::{
     gpio::{Gpio, OutputPin, Result},
     i2c::I2c,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     env,
+    fs::{read_to_string, File},
+    io::{Read, Write},
     sync::{Arc, Mutex},
     thread::{sleep, spawn},
     time::Duration,
@@ -53,10 +56,16 @@ fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result
     Ok(())
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct Board {
     mac: Option<String>,
     values: Vec<TestReportValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BoardUploadFailure {
+    board: Board,
+    error: String,
 }
 
 fn main() {
@@ -480,7 +489,15 @@ fn main() {
         }
     });
 
-    spawn(move || loop {
+    spawn(move || {
+        let mut upload_failed_boards = {
+            let failed_boards = read_to_string("failed_boards.json").unwrap_or("[]".to_string());
+
+            serde_json::from_str::<Vec<BoardUploadFailure>>(&failed_boards)
+                .unwrap_or_else(|_| Vec::new())
+        };
+
+        loop {
         let board_tests_to_upload = {
             let mut reports_to_upload = boards_to_upload.lock().unwrap();
             let boards_to_upload = reports_to_upload.clone();
@@ -493,9 +510,9 @@ fn main() {
             let body = ApiRequestBody {
                 method: "insert_test_report".to_string(),
                 params: ApiRequestBodyInsertTestReport(TestReport {
-                    id: board.mac.unwrap_or(Uuid::new_v4().to_string()),
+                        id: board.mac.clone().unwrap_or(Uuid::new_v4().to_string()),
                     _type: "main-board".to_string(),
-                    values: board.values,
+                        values: board.values.clone(),
                 }),
             };
 
@@ -507,15 +524,44 @@ fn main() {
                 .send()
             {
                 Ok(s) => {
-                    println!("{}", s.text().unwrap());
+                        if s.status() != reqwest::StatusCode::OK {
+                            let e = s.text().unwrap();
+
+                            println!("Failed to upload report: {}", e);
+
+                            upload_failed_boards.push(BoardUploadFailure { board, error: e });
+
+                            continue;
+                        }
+
+                        let e = s.text().unwrap();
+
+                        println!("{}", e);
                 }
                 Err(e) => {
                     println!("Failed to upload report: {}", e);
+
+                        upload_failed_boards.push(BoardUploadFailure {
+                            board,
+                            error: e.to_string(),
+                        });
                 }
             }
+            }
+
+            {
+                let mut failed_boards_file = File::create("failed_boards.json").unwrap();
+                failed_boards_file
+                    .write_all(
+                        serde_json::to_string_pretty(&upload_failed_boards)
+                            .unwrap()
+                            .as_bytes(),
+                    )
+                    .unwrap();
         }
 
         sleep(Duration::from_secs(1));
+        }
     });
 
     renderer.run().unwrap();

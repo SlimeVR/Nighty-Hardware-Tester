@@ -1161,6 +1161,7 @@ dependencies = [
  "rppal",
  "rusb",
  "serde",
+ "serde_json",
  "serialport",
  "uuid",
 ]

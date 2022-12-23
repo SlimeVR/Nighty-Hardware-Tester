@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -21,7 +21,7 @@ pub struct TestReport {
     pub values: Vec<TestReportValue>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TestReportValue {
     pub id: String,
     pub step: String,
