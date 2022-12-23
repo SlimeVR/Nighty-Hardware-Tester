@@ -147,7 +147,7 @@ fn main() {
                         board.values.push(TestReportValue::new(
                             "Measure VOUT",
                             "none",
-                            v,
+                            v.to_string() + "V",
                             None::<&str>,
                             false,
                         ));
@@ -198,7 +198,7 @@ fn main() {
                         board.values.push(TestReportValue::new(
                             "Measure B+",
                             "B+ > 4.0V",
-                            v,
+                            v.to_string() + "V",
                             None::<&str>,
                             bplus_err,
                         ));
@@ -257,7 +257,7 @@ fn main() {
                         board.values.push(TestReportValue::new(
                             "Measure 3V3",
                             "2.8V > 3V3 < 3.2V",
-                            v,
+                            v.to_string() + "V",
                             None::<&str>,
                             r3v3_err,
                         ));
@@ -506,32 +506,32 @@ fn main() {
         };
 
         loop {
-        let board_tests_to_upload = {
-            let mut reports_to_upload = boards_to_upload.lock().unwrap();
-            let boards_to_upload = reports_to_upload.clone();
-            reports_to_upload.clear();
+            let board_tests_to_upload = {
+                let mut reports_to_upload = boards_to_upload.lock().unwrap();
+                let boards_to_upload = reports_to_upload.clone();
+                reports_to_upload.clear();
 
-            boards_to_upload
-        };
-
-        for board in board_tests_to_upload {
-            let body = ApiRequestBody {
-                method: "insert_test_report".to_string(),
-                params: ApiRequestBodyInsertTestReport(TestReport {
-                        id: board.mac.clone().unwrap_or(Uuid::new_v4().to_string()),
-                    _type: "main-board".to_string(),
-                        values: board.values.clone(),
-                }),
+                boards_to_upload
             };
 
-            let client = reqwest::blocking::Client::new();
-            match client
-                .post(&rpc_url)
-                .header("authorization", &rpc_password)
-                .json(&body)
-                .send()
-            {
-                Ok(s) => {
+            for board in board_tests_to_upload {
+                let body = ApiRequestBody {
+                    method: "insert_test_report".to_string(),
+                    params: ApiRequestBodyInsertTestReport(TestReport {
+                        id: board.mac.clone().unwrap_or(Uuid::new_v4().to_string()),
+                        _type: "main-board".to_string(),
+                        values: board.values.clone(),
+                    }),
+                };
+
+                let client = reqwest::blocking::Client::new();
+                match client
+                    .post(&rpc_url)
+                    .header("authorization", &rpc_password)
+                    .json(&body)
+                    .send()
+                {
+                    Ok(s) => {
                         if s.status() != reqwest::StatusCode::OK {
                             let e = s.text().unwrap();
 
@@ -545,16 +545,16 @@ fn main() {
                         let e = s.text().unwrap();
 
                         println!("{}", e);
-                }
-                Err(e) => {
-                    println!("Failed to upload report: {}", e);
+                    }
+                    Err(e) => {
+                        println!("Failed to upload report: {}", e);
 
                         upload_failed_boards.push(BoardUploadFailure {
                             board,
                             error: e.to_string(),
                         });
+                    }
                 }
-            }
             }
 
             {
@@ -566,9 +566,9 @@ fn main() {
                             .as_bytes(),
                     )
                     .unwrap();
-        }
+            }
 
-        sleep(Duration::from_secs(1));
+            sleep(Duration::from_secs(1));
         }
     });
 
