@@ -406,7 +406,7 @@ fn main() {
                     reset_esp_no_delay(&mut rst_pin).unwrap();
 
                     let serial = serialport::new("/dev/ttyUSB0", 115200)
-                        .timeout(Duration::from_millis(1000))
+                        .timeout(Duration::from_millis(10000))
                         .data_bits(serialport::DataBits::Seven)
                         .open();
 
@@ -425,15 +425,26 @@ fn main() {
 
                     let mut full_logs = String::new();
                     let mut buffer = String::new();
-                    let mut buf = [0; 128];
                     let i2c_logs = loop {
-                        let Ok( bytes_read) = serial.read(&mut buf) else {
-                            break Err("Failed to read logs: could not read from serial port".to_string());
-                        };
+                        let (buf, bytes_read) = {
+                            let mut buf = [0; 128];
 
-                        if bytes_read == 0 {
-                            continue;
-                        }
+                            match serial.read(&mut buf) {
+                                Ok(bytes_read) => {
+                                    if bytes_read == 0 {
+                                        continue;
+                                    }
+
+                                    (buf, bytes_read)
+                                }
+                                Err(e) => {
+                                    break Err(format!(
+                                        "Failed to read logs: could not read from serial port: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                        };
 
                         let str =
                             String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
