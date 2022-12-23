@@ -5,8 +5,8 @@ import { publicProcedure, router } from "../trpc";
 export const appRouter = router({
   reports: publicProcedure
     .input(DatabasePagination)
-    .query(async ({ ctx, input }) => {
-      return await ctx.prisma.testReport
+    .query(async ({ ctx, input }) =>
+      ctx.prisma.testReport
         .findMany({
           take: input.limit,
           skip: input.offset,
@@ -14,8 +14,8 @@ export const appRouter = router({
             values: true,
           },
         })
-        .then((reports) => reports.map(TestReportToDto));
-    }),
+        .then((reports) => reports.map(TestReportToDto))
+    ),
 });
 
 export type AppRouter = typeof appRouter;

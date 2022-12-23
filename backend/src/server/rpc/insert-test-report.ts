@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db/client";
 import { TestReportValidator } from "@/server/dtos/helper";
 import { err, ok, Result } from "@/utils/result";
+import { TestReportValue } from "@prisma/client";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
@@ -17,18 +18,40 @@ export const handleInsertTestReportRPC = async (
   params: InsertTestReport["params"]
 ): Promise<Result<{ id: string }, string>> => {
   try {
-    const { id } = await prisma.testReport.create({
-      data: {
+    const { id } = await prisma.testReport.upsert({
+      where: {
+        id: params.id,
+      },
+      create: {
         id: params.id,
         type: params.type,
         values: {
           createMany: {
-            data: params.values.map((value) => ({
-              step: value.step,
-              failed: value.failed,
-              condition: value.condition,
-              value: value.value,
-            })),
+            data: params.values.map(
+              (value): Omit<Omit<TestReportValue, "id">, "testReportId"> => ({
+                step: value.step,
+                failed: value.failed,
+                condition: value.condition,
+                value: value.value,
+                logs: value.logs,
+              })
+            ),
+          },
+        },
+      },
+      update: {
+        values: {
+          deleteMany: {},
+          createMany: {
+            data: params.values.map(
+              (value): Omit<Omit<TestReportValue, "id">, "testReportId"> => ({
+                step: value.step,
+                failed: value.failed,
+                condition: value.condition,
+                value: value.value,
+                logs: value.logs,
+              })
+            ),
           },
         },
       },
