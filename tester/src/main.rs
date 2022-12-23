@@ -26,12 +26,18 @@ use uuid::Uuid;
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
 
-fn reset_esp(pin: &mut OutputPin) -> Result<()> {
+fn reset_esp_no_delay(pin: &mut OutputPin) -> Result<()> {
     pin.set_low();
 
     sleep(Duration::from_millis(500));
 
     pin.set_high();
+
+    Ok(())
+}
+
+fn reset_esp(pin: &mut OutputPin) -> Result<()> {
+    reset_esp_no_delay(pin)?;
 
     sleep(Duration::from_millis(200));
 
@@ -397,8 +403,10 @@ fn main() {
 
             {
                 let err = {
+                    reset_esp_no_delay(&mut rst_pin).unwrap();
+
                     let serial = serialport::new("/dev/ttyUSB0", 115200)
-                        .timeout(Duration::from_millis(10000))
+                        .timeout(Duration::from_millis(1000))
                         .data_bits(serialport::DataBits::Seven)
                         .open();
 
