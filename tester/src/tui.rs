@@ -11,8 +11,13 @@ enum ReportEvent {
     Error(String),
     InProgress(String),
     Action(String),
+    Fill(Color),
 }
 
+pub enum Color {
+    Green,
+    Red,
+}
 pub struct TUI {
     rx: sync::mpsc::Receiver<Event>,
     tx: sync::mpsc::Sender<Event>,
@@ -51,27 +56,39 @@ impl Renderer {
             std::io::stdout(),
             crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
         )?;
+        crossterm::execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0))?;
+
+        let (columns, rows) = crossterm::terminal::size().unwrap();
 
         let lines = self
             .report_events
             .iter()
-            .map(|e| {
-                let (style, s) = match &e {
-                    ReportEvent::Success(s) => (colored::Color::Green, s),
-                    ReportEvent::Error(s) => (colored::Color::Red, s),
-                    ReportEvent::InProgress(s) => (colored::Color::White, s),
-                    ReportEvent::Action(s) => (colored::Color::BrightBlue, s),
-                };
-
-                format!("{}", s.color(style))
+            .map(|e| match &e {
+                ReportEvent::Success(s) => Some((colored::Color::Green, s)),
+                ReportEvent::Error(s) => Some((colored::Color::Red, s)),
+                ReportEvent::InProgress(s) => Some((colored::Color::White, s)),
+                ReportEvent::Action(s) => Some((colored::Color::BrightBlue, s)),
+                ReportEvent::Fill(_) => None,
             })
-            .collect::<Vec<String>>()
-            .join("\n");
+            .filter_map(|e| e)
+            .map(|(color, s)| format!("{}", s.color(color)))
+            .collect::<Vec<String>>();
 
-        crossterm::queue!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0))?;
-        // crossterm::queue!(std::io::stdout(), crossterm::style::Print(lines))?;
+        println!("{}", lines.join("\n"));
 
-        println!("{}", lines);
+        if let Some(ReportEvent::Fill(color)) = self.report_events.last() {
+            let color = match color {
+                Color::Green => colored::Color::Green,
+                Color::Red => colored::Color::Red,
+            };
+
+            let s = "X".repeat(columns as usize);
+
+            let rows = rows as usize - lines.len() - 1;
+            for _ in 0..rows {
+                println!("{}", s.on_color(color).color(color));
+            }
+        }
 
         Ok(())
     }
@@ -132,6 +149,12 @@ impl Reporter {
     pub fn action(&mut self, msg: impl ToString) {
         self.tx
             .send(Event::ReportEvent(ReportEvent::Action(msg.to_string())))
+            .unwrap();
+    }
+
+    pub fn fill(&mut self, color: Color) {
+        self.tx
+            .send(Event::ReportEvent(ReportEvent::Fill(color)))
             .unwrap();
     }
 

@@ -309,6 +309,9 @@ fn main() {
             if err {
                 reporter.error("-> Faulty power circuit");
 
+                reporter.fill(tui::Color::Red);
+                sleep(Duration::from_secs(1));
+
                 wait_for_next_board(&mut reporter, board);
                 continue;
             }
@@ -344,6 +347,9 @@ fn main() {
 
                         reporter.error(&format!("Failed to read MAC address: {}", e));
                         reporter.error("-> ESP8266 faulty");
+
+                        reporter.fill(tui::Color::Red);
+                        sleep(Duration::from_secs(1));
 
                         wait_for_next_board(&mut reporter, board);
 
@@ -393,6 +399,9 @@ fn main() {
 
                         reporter.error(&format!("Flashing: {}", e));
                         reporter.error("-> Flashing failed");
+
+                        reporter.fill(tui::Color::Red);
+                        sleep(Duration::from_secs(1));
 
                         wait_for_next_board(&mut reporter, board);
 
@@ -495,6 +504,10 @@ fn main() {
                             true,
                         ));
 
+                        sleep(Duration::from_secs(2));
+                        reporter.fill(tui::Color::Green);
+                        sleep(Duration::from_secs(1));
+
                         wait_for_next_board(&mut reporter, board);
 
                         continue;
@@ -503,6 +516,9 @@ fn main() {
             }
 
             reporter.success("Board tested successfully");
+
+            reporter.fill(tui::Color::Green);
+            sleep(Duration::from_secs(1));
 
             wait_for_next_board(&mut reporter, board);
         }
