@@ -1,9 +1,10 @@
 use ads1x1x::ChannelSelection;
 use rppal::{
-    gpio::{Gpio, OutputPin, Result},
+    gpio::{Gpio, OutputPin},
     i2c::I2c,
 };
 use serde::{Deserialize, Serialize};
+use serialport::SerialPort;
 use std::{
     env,
     fs::{read_to_string, File},
@@ -26,30 +27,30 @@ use uuid::Uuid;
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
 
-fn reset_esp_no_delay(pin: &mut OutputPin) -> Result<()> {
+fn reset_esp_no_delay(pin: &mut OutputPin) -> rppal::gpio::Result<()> {
     pin.set_low();
 
-    sleep(Duration::from_millis(500));
+    sleep(Duration::from_millis(200));
 
     pin.set_high();
 
     Ok(())
 }
 
-fn reset_esp(pin: &mut OutputPin) -> Result<()> {
+fn reset_esp(pin: &mut OutputPin) -> rppal::gpio::Result<()> {
     reset_esp_no_delay(pin)?;
 
-    sleep(Duration::from_millis(200));
+    sleep(Duration::from_millis(100));
 
     Ok(())
 }
 
-fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result<()> {
+fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> rppal::gpio::Result<()> {
     flash_pin.set_low();
 
     rst_pin.set_low();
 
-    sleep(Duration::from_millis(500));
+    sleep(Duration::from_millis(200));
 
     rst_pin.set_high();
 
@@ -57,7 +58,7 @@ fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> Result
 
     flash_pin.set_high();
 
-    sleep(Duration::from_millis(200));
+    sleep(Duration::from_millis(100));
 
     Ok(())
 }
@@ -72,6 +73,15 @@ struct Board {
 struct BoardUploadFailure {
     board: Board,
     error: String,
+}
+
+fn read_serial(serial: &mut Box<dyn SerialPort>) -> Result<([u8; 128], usize), String> {
+    let mut buf = [0; 128];
+
+    match serial.read(&mut buf) {
+        Ok(bytes_read) => Ok((buf, bytes_read)),
+        Err(e) => return Err(format!("could not read from serial port: {}", e)),
+    }
 }
 
 fn main() {
@@ -135,7 +145,7 @@ fn main() {
 
             usb::wait_until_device_is_connected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
-            sleep(Duration::from_millis(1000));
+            sleep(Duration::from_millis(250));
 
             reporter.reset();
 
@@ -411,107 +421,288 @@ fn main() {
             };
 
             {
-                let err = {
-                    reset_esp_no_delay(&mut rst_pin).unwrap();
+                reset_esp_no_delay(&mut rst_pin).unwrap();
 
-                    let serial = serialport::new("/dev/ttyUSB0", 115200)
-                        .timeout(Duration::from_millis(10000))
-                        .data_bits(serialport::DataBits::Seven)
-                        .open();
+                reporter.in_progress("Connecting to serial port...");
 
-                    if serial.is_err() {
-                        reporter.error("Failed to read logs: could not open serial port");
+                let serial = serialport::new("/dev/ttyUSB0", 115200)
+                    .timeout(Duration::from_millis(10000))
+                    .data_bits(serialport::DataBits::Seven)
+                    .open();
 
-                        return Err::<String, String>(
-                            "Failed to read logs: could not open serial port".to_string(),
-                        );
-                    }
-
-                    let mut serial = serial.unwrap();
-
-                    println!("Streaming logs from serial port...");
-                    println!("==================================");
-
-                    let mut full_logs = String::new();
-                    let mut buffer = String::new();
-                    let i2c_logs = loop {
-                        let (buf, bytes_read) = {
-                            let mut buf = [0; 128];
-
-                            match serial.read(&mut buf) {
-                                Ok(bytes_read) => {
-                                    if bytes_read == 0 {
-                                        continue;
-                                    }
-
-                                    (buf, bytes_read)
-                                }
-                                Err(e) => {
-                                    break Err(format!(
-                                        "Failed to read logs: could not read from serial port: {}",
-                                        e
-                                    ));
-                                }
-                            }
-                        };
-
-                        let str =
-                            String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
-
-                        full_logs += &str;
-                        buffer += &str;
-
-                        if let Some(i) = buffer.rfind('\n') {
-                            let (line, rest) = buffer.split_at(i + 1);
-                            let l = line.to_owned();
-                            buffer = rest.to_string();
-
-                            println!("{}", l);
-
-                            if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") || l.contains("[FATAL] [BNO080Sensor:0] Can't connect to") {
-                                reporter.error("I2C to IMU faulty");
-                                break Err(full_logs);
-                            }
-
-                            if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
-                                reporter.success("I2C to IMU working");
-                                break Ok(full_logs);
-                            }
-                        }
-                    };
-
-                    i2c_logs
-                };
-
-                match err {
-                    Ok(logs) => {
+                let mut serial = match serial {
+                    Ok(serial) => {
                         board.values.push(TestReportValue::new(
-                            "I2C to IMU",
-                            "I2C to IMU should work",
+                            "Serial",
+                            "Serial should work",
                             true,
-                            Some(logs),
+                            None::<&str>,
                             false,
                         ));
+
+                        reporter.success("Serial port opened");
+
+                        serial
                     }
-                    Err(logs) => {
-                        reporter.error(&logs);
+                    Err(error) => {
+                        reporter.error(format!("Failed to open serial port: {}", error).as_str());
 
                         board.values.push(TestReportValue::new(
-                            "I2C to IMU",
-                            "I2C to IMU should work",
+                            "Serial",
+                            "Serial should work",
                             false,
-                            Some(logs),
+                            Some(error),
                             true,
                         ));
 
-                        sleep(Duration::from_secs(2));
-                        reporter.fill(tui::Color::Green);
+                        reporter.fill(tui::Color::Red);
                         sleep(Duration::from_secs(1));
 
                         wait_for_next_board(&mut reporter, board);
 
                         continue;
                     }
+                };
+
+                // Read serial logs for checking the logs for sensor errors
+                {
+                    reporter.in_progress("Checking I2C connection to IMU...");
+
+                    let mut full_logs = String::new();
+
+                    let err = {
+                        let mut buffer = String::new();
+
+                        println!("Streaming logs from serial port...");
+                        println!("==================================");
+
+                        loop {
+                            let read = read_serial(&mut serial);
+                            if let Err(e) = read {
+                                reporter.error(&format!("Failed to read logs: {}", e));
+                                break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
+                            }
+
+                            let (buf, bytes_read) = read.unwrap();
+                            let str =
+                                String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
+
+                            full_logs += &str;
+                            buffer += &str;
+
+                            if let Some(i) = buffer.rfind('\n') {
+                                let (line, rest) = buffer.split_at(i + 1);
+                                let l = line.to_owned();
+                                buffer = rest.to_string();
+
+                                println!("{}", l);
+
+                                if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") ||
+                                l.contains("[FATAL] [BNO080Sensor:0] Can't connect to"
+                            ) {
+                                reporter.error("I2C to IMU faulty");
+                                break Err(full_logs);
+                            }
+
+                                if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
+                                    reporter.success("I2C to IMU working");
+                                    break Ok(full_logs);
+                                }
+                            }
+                        }
+                    };
+
+                    match err {
+                        Ok(logs) => {
+                            board.values.push(TestReportValue::new(
+                                "I2C to IMU",
+                                "I2C to IMU should work",
+                                true,
+                                Some(logs),
+                                false,
+                            ));
+                        }
+                        Err(logs) => {
+                            reporter.error(&logs);
+
+                            board.values.push(TestReportValue::new(
+                                "I2C to IMU",
+                                "I2C to IMU should work",
+                                false,
+                                Some(logs),
+                                true,
+                            ));
+
+                            reporter.fill(tui::Color::Red);
+                            sleep(Duration::from_secs(1));
+
+                            wait_for_next_board(&mut reporter, board);
+
+                            continue;
+                        }
+                    };
+                };
+
+                sleep(Duration::from_millis(3000));
+
+                {
+                    reporter.in_progress("Checking IMU via `GET TEST` command...");
+
+                    let mut full_logs = String::new();
+
+                    if let Err(e) = serial.write_all(b"GET TEST\n") {
+                        reporter.error(&format!("Failed to write to serial port: {}", e));
+
+                        board.values.push(TestReportValue::new(
+                            "IMU test",
+                            "IMU test should work",
+                            false,
+                            Some(format!("Failed to write to serial port: {}", e)),
+                            true,
+                        ));
+
+                        reporter.fill(tui::Color::Red);
+                        sleep(Duration::from_secs(1));
+
+                        wait_for_next_board(&mut reporter, board);
+
+                        continue;
+                    }
+
+                    println!("Wrote `GET TEST\\n` to serial port");
+
+                    if let Err(e) = serial.flush() {
+                        reporter.error(&format!("Failed to flush serial port: {}", e));
+
+                        board.values.push(TestReportValue::new(
+                            "IMU test",
+                            "IMU test should work",
+                            false,
+                            Some(format!("Failed to flush serial port: {}", e)),
+                            true,
+                        ));
+
+                        reporter.fill(tui::Color::Red);
+                        sleep(Duration::from_secs(1));
+
+                        wait_for_next_board(&mut reporter, board);
+
+                        continue;
+                    }
+
+                    println!("Flushed serial port");
+
+                    if let Err(e) = serial.write_all(b"GET TEST\n") {
+                        reporter.error(&format!("Failed to write to serial port: {}", e));
+
+                        board.values.push(TestReportValue::new(
+                            "IMU test",
+                            "IMU test should work",
+                            false,
+                            Some(format!("Failed to write to serial port: {}", e)),
+                            true,
+                        ));
+
+                        reporter.fill(tui::Color::Red);
+                        sleep(Duration::from_secs(1));
+
+                        wait_for_next_board(&mut reporter, board);
+
+                        continue;
+                    }
+
+                    println!("Wrote `GET TEST\\n` to serial port");
+
+                    if let Err(e) = serial.flush() {
+                        reporter.error(&format!("Failed to flush serial port: {}", e));
+
+                        board.values.push(TestReportValue::new(
+                            "IMU test",
+                            "IMU test should work",
+                            false,
+                            Some(format!("Failed to flush serial port: {}", e)),
+                            true,
+                        ));
+
+                        reporter.fill(tui::Color::Red);
+                        sleep(Duration::from_secs(1));
+
+                        wait_for_next_board(&mut reporter, board);
+
+                        continue;
+                    }
+
+                    println!("Flushed serial port");
+
+                    let err = {
+                        let mut buffer = String::new();
+
+                        println!("Streaming logs from serial port...");
+                        println!("==================================");
+
+                        loop {
+                            let read = read_serial(&mut serial);
+                            if let Err(e) = read {
+                                reporter.error(&format!("Failed to read logs: {}", e));
+                                break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
+                            }
+
+                            let (buf, bytes_read) = read.unwrap();
+                            let str =
+                                String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
+
+                            full_logs += &str;
+                            buffer += &str;
+
+                            if let Some(i) = buffer.rfind('\n') {
+                                let (line, rest) = buffer.split_at(i + 1);
+                                let l = line.to_owned();
+                                buffer = rest.to_string();
+
+                                println!("{}", l);
+
+                                if l.contains("Sensor 1 didn't send any data yet!") {
+                                    reporter.error("IMU faulty");
+                                    break Err(full_logs);
+                                }
+
+                                if l.contains("Sensor 1 sent some data, looks working.") {
+                                    reporter.error("IMU working");
+                                    break Ok(full_logs);
+                                }
+                            }
+                        }
+                    };
+
+                    match err {
+                        Ok(logs) => {
+                            board.values.push(TestReportValue::new(
+                                "IMU test",
+                                "IMU test should work",
+                                true,
+                                Some(logs),
+                                false,
+                            ));
+                        }
+                        Err(logs) => {
+                            reporter.error(&logs);
+
+                            board.values.push(TestReportValue::new(
+                                "IMU test",
+                                "IMU test should work",
+                                false,
+                                Some(logs),
+                                true,
+                            ));
+
+                            reporter.fill(tui::Color::Red);
+                            sleep(Duration::from_secs(1));
+
+                            wait_for_next_board(&mut reporter, board);
+
+                            continue;
+                        }
+                    };
                 };
             }
 
