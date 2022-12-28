@@ -27,8 +27,8 @@ pub fn flash(
     environment: &str,
     flash_pin: &mut gpio::OutputPin,
     rst_pin: &mut gpio::OutputPin,
-    enable_flashing: &dyn Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
-    reset_chip: &dyn Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
+    enable_flashing: impl Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
+    reset_chip: impl Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
 ) -> gpio::Result<String> {
     enable_flashing(flash_pin, rst_pin)?;
 
