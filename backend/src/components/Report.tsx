@@ -60,12 +60,12 @@ export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
       <Disclosure>
         {({ open }) => (
           <>
-            <Disclosure.Button className="flex w-full justify-between p-2">
-              <div className="w-fit self-start">
+            <Disclosure.Button className="text-left flex w-full gap-4 p-2">
+              <div className="flex-1">
                 <Chip text={report.id} monospace />
               </div>
 
-              <div className="w-fit">
+              <div className="w-fit self-center">
                 {new Date(report.testedAt).toLocaleString()}
               </div>
 
