@@ -32,6 +32,7 @@ export type TestReportDto = Omit<
   "values"
 > & {
   values: TestReportValueDto[];
+  testedAt: string;
 };
 export const TestReportToDto = (
   report: TestReport & { values: TestReportValue[] }
@@ -39,4 +40,5 @@ export const TestReportToDto = (
   id: report.id,
   type: report.type,
   values: report.values.map(TestReportValueToDto),
+  testedAt: report.testedAt.toISOString(),
 });

@@ -65,6 +65,10 @@ export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
                 <Chip text={report.id} monospace />
               </div>
 
+              <div className="w-fit">
+                {new Date(report.testedAt).toLocaleString()}
+              </div>
+
               <div className="w-fit self-center">
                 {open ? (
                   <HiChevronUp className="text-white" />
