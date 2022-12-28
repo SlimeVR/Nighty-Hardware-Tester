@@ -13,6 +13,9 @@ export const appRouter = router({
           include: {
             values: true,
           },
+          orderBy: {
+            testedAt: "desc",
+          },
         })
         .then((reports) => reports.map(TestReportToDto))
     ),
