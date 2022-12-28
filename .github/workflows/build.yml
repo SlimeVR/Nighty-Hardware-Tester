@@ -23,6 +23,11 @@ jobs:
           command: build
           args: --release --target aarch64-unknown-linux-gnu
 
+      - uses: actions/upload-artifact@v2
+        with:
+          name: tester
+          path: target/aarch64-unknown-linux-gnu/release/tester
+
   # Written in Node.JS, built as a Docker image
   build-backend:
     runs-on: ubuntu-latest
