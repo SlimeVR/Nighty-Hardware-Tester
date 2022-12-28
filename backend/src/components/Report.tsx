@@ -65,7 +65,7 @@ export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
       <Disclosure>
         {({ open }) => (
           <>
-            <Disclosure.Button className="text-left flex w-full gap-4 p-2">
+            <Disclosure.Button className="flex w-full gap-4 p-2 text-left">
               <div className="flex-1">
                 <Chip text={report.id} monospace />
               </div>
