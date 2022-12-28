@@ -18,30 +18,11 @@ export const handleInsertTestReportRPC = async (
   params: InsertTestReport["params"]
 ): Promise<Result<{ id: string }, string>> => {
   try {
-    const { id } = await prisma.testReport.upsert({
-      where: {
-        id: params.id,
-      },
-      create: {
+    const { id } = await prisma.testReport.create({
+      data: {
         id: params.id,
         type: params.type,
         values: {
-          createMany: {
-            data: params.values.map(
-              (value): Omit<Omit<TestReportValue, "id">, "testReportId"> => ({
-                step: value.step,
-                failed: value.failed,
-                condition: value.condition,
-                value: value.value,
-                logs: value.logs,
-              })
-            ),
-          },
-        },
-      },
-      update: {
-        values: {
-          deleteMany: {},
           createMany: {
             data: params.values.map(
               (value): Omit<Omit<TestReportValue, "id">, "testReportId"> => ({

@@ -8,7 +8,9 @@ datasource db {
 }
 
 model TestReport {
-  id     String            @id @unique
+  uuid String @id @unique @default(uuid()) @db.Uuid
+
+  id     String
   type   String
   values TestReportValue[]
 
@@ -27,6 +29,6 @@ model TestReportValue {
 
   failed Boolean
 
-  testReport   TestReport? @relation(fields: [testReportId], references: [id])
-  testReportId String?
+  testReport   TestReport? @relation(fields: [testReportId], references: [uuid])
+  testReportId String?     @db.Uuid
 }
