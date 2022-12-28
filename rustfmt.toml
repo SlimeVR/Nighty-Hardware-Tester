@@ -1,0 +1,2 @@
+hard_tabs = true # Let people make indents smaller
+max_width = 88   # from python's black
