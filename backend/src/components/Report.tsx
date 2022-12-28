@@ -54,7 +54,12 @@ const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
 export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
   return (
     <div
-      className="space-y-1 rounded-lg border border-gray-800 bg-card"
+      className={clsx(
+        "space-y-1 rounded-lg border border-l-4 border-gray-800 bg-card",
+        report.values.some((v) => v.failed)
+          ? "border-l-red-600"
+          : "border-l-green-600"
+      )}
       key={report.id}
     >
       <Disclosure>
