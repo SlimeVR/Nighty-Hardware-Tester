@@ -427,7 +427,7 @@ fn main() {
 
                 let serial = serialport::new("/dev/ttyUSB0", 115200)
                     .timeout(Duration::from_millis(10000))
-                    .data_bits(serialport::DataBits::Seven)
+                    .data_bits(serialport::DataBits::Eight)
                     .open();
 
                 let mut serial = match serial {
