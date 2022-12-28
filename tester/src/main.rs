@@ -543,7 +543,7 @@ fn main() {
                     };
                 };
 
-                sleep(Duration::from_millis(3000));
+                sleep(Duration::from_millis(100));
 
                 {
                     reporter.in_progress("Checking IMU via `GET TEST` command...");
