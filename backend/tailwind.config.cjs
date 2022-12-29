@@ -4,9 +4,9 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: "#0D1117",
+        bg: "#0D0D1D",
         card: "#14191E",
-        field: "#262B32",
+        field: "#202B32",
       },
       width: {
         '4/12-without-gap': 'calc(33.333333% - 1rem)'
