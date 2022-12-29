@@ -30,12 +30,12 @@ export const appRouter = router({
             .map(TestReportToDto)
             .filter(
               (report) =>
-                input.id &&
+                !input.id ||
                 report.id.toLowerCase().includes(input.id.toLowerCase())
             )
             .filter(
               (report) =>
-                input.onlyFailedReports &&
+                !input.onlyFailedReports ||
                 report.values.some((value) => value.failed)
             )
         )
