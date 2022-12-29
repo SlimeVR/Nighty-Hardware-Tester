@@ -19,7 +19,7 @@ const Home: NextPage = () => {
   return (
     <div className="flex flex-col gap-2">
       {reports.map((report) => (
-        <ReportComponent report={report} key={report.id} />
+        <ReportComponent report={report} key={report.uuid} />
       ))}
     </div>
   );

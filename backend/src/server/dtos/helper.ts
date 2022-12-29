@@ -31,12 +31,14 @@ export type TestReportDto = Omit<
   z.infer<typeof TestReportValidator>,
   "values"
 > & {
+  uuid: string;
   values: TestReportValueDto[];
   testedAt: string;
 };
 export const TestReportToDto = (
   report: TestReport & { values: TestReportValue[] }
 ): TestReportDto => ({
+  uuid: report.uuid,
   id: report.id,
   type: report.type,
   values: report.values.map(TestReportValueToDto),
