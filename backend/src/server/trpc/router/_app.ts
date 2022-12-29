@@ -1,10 +1,17 @@
+import { z } from "zod";
 import { TestReportToDto } from "../../dtos/helper";
 import { DatabasePagination } from "../../dtos/validation";
 import { publicProcedure, router } from "../trpc";
 
 export const appRouter = router({
   reports: publicProcedure
-    .input(DatabasePagination)
+    .input(
+      z
+        .object({
+          onlyFailedReports: z.boolean().optional(),
+        })
+        .and(DatabasePagination)
+    )
     .query(async ({ ctx, input }) =>
       ctx.prisma.testReport
         .findMany({
@@ -17,7 +24,15 @@ export const appRouter = router({
             testedAt: "desc",
           },
         })
-        .then((reports) => reports.map(TestReportToDto))
+        .then((reports) =>
+          reports
+            .map(TestReportToDto)
+            .filter(
+              (report) =>
+                input.onlyFailedReports &&
+                report.values.some((value) => value.failed)
+            )
+        )
     ),
 });
 
