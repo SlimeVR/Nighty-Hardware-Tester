@@ -1,5 +1,7 @@
 use reqwest::blocking;
 
+use crate::options;
+
 use super::{
     ApiRequestBody, ApiRequestBodyParams::ApiRequestBodyInsertTestReport, TestReport,
     TestReportValue,
@@ -18,6 +20,10 @@ impl Client {
             rpc_password,
             client: blocking::Client::new(),
         }
+    }
+
+    pub fn from_options(options: &options::Options) -> Client {
+        Client::new(options.rpc_url.clone(), options.rpc_password.clone())
     }
 
     pub fn send_test_report(

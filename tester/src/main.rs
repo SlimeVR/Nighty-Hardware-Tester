@@ -2,14 +2,13 @@ use ads1x1x::ChannelSelection;
 use rppal::{gpio, i2c};
 use serde::{Deserialize, Serialize};
 use std::{
-    env,
     fs::{read_to_string, File},
     io::Write,
     sync::{Arc, Mutex},
     thread::{sleep, spawn},
     time::Duration,
 };
-use tester::{adc, api, esp, esptool, logger, pio, serial, usb};
+use tester::{adc, api, esp, esptool, logger, options, pio, serial, usb};
 
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
@@ -26,18 +25,37 @@ struct BoardUploadFailure {
     error: String,
 }
 
+fn maybe_build_firmware(
+    options: &options::Options,
+    logger: &mut logger::Logger,
+) -> gpio::Result<()> {
+    if options.no_build {
+        logger.in_progress("Skipping firmware build...");
+        sleep(Duration::from_millis(500));
+        logger.reset();
+
+        Ok(())
+    } else {
+        logger.in_progress("Building firmware...");
+        pio::build("esp12e")?;
+        logger.reset();
+
+        Ok(())
+    }
+}
+
 fn main() {
-    let flash_with_pio = env::var("TESTER_FLASH_WITH_PIO").unwrap_or("0".to_string()) == "1";
-    let rpc_url = env::var("TESTER_RPC_URL").unwrap();
-    let rpc_password = env::var("TESTER_RPC_PASSWORD").unwrap();
+    let options = Arc::new(options::Options::parse());
 
     let (mut renderer, mut logger) = logger::LoggerBuilder::split();
 
     let boards_to_upload: Arc<Mutex<Vec<Board>>> = Arc::new(Mutex::new(Vec::new()));
 
     let reports_to_upload_clone = boards_to_upload.clone();
+    let options_clone = options.clone();
     spawn(move || {
         let reports_to_upload = reports_to_upload_clone;
+        let options = options_clone;
 
         let wait_for_next_board = |logger: &mut logger::Logger, board: Board| {
             {
@@ -52,20 +70,10 @@ fn main() {
             logger.reset();
         };
 
-        if flash_with_pio {
-            logger.in_progress("Skipping firmware build, flashing with PlatformIO...");
-            sleep(Duration::from_millis(500));
-            logger.reset();
-        } else {
-            if env::var("TESTER_NO_BUILD").unwrap_or("0".to_string()) == "1" {
-                logger.in_progress("Skipping firmware build, building disabled via env...");
-                sleep(Duration::from_millis(500));
-                logger.reset();
-            } else {
-                logger.in_progress("Building firmware...");
-                pio::build("esp12e").unwrap();
-                logger.reset();
-            }
+        if let Err(e) = maybe_build_firmware(&options, &mut logger) {
+            println!("Could not build firmware: {}", e);
+
+            std::process::exit(1);
         }
 
         let i2c = i2c::I2c::with_bus(1).unwrap();
@@ -310,14 +318,16 @@ fn main() {
 
             {
                 logger.in_progress("Flashing...");
-                match if flash_with_pio {
-                    pio::flash("esp12e", &mut esp)
-                } else {
-                    esptool::write_flash(
+
+                let result = match options.flash_with {
+                    options::FlashWith::ESPTool => esptool::write_flash(
                         "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
                         &mut esp,
-                    )
-                } {
+                    ),
+                    options::FlashWith::PlatformIO => pio::flash("esp12e", &mut esp),
+                };
+
+                match result {
                     Ok(logs) => {
                         board.values.push(api::TestReportValue::new(
                             "Flashing",
@@ -582,7 +592,7 @@ fn main() {
     });
 
     spawn(move || {
-        let client = api::Client::new(rpc_url, rpc_password);
+        let client = api::Client::from_options(&options);
 
         let mut upload_failed_boards = {
             let failed_boards = read_to_string("failed_boards.json").unwrap_or("[]".to_string());
