@@ -57,18 +57,20 @@ fn main() {
         let reports_to_upload = reports_to_upload_clone;
         let options = options_clone;
 
-        let wait_for_next_board = |logger: &mut logger::Logger, board: Board| {
-            {
-                let mut reports = reports_to_upload.lock().unwrap();
-                reports.push(board);
-            }
+        let wait_for_next_board =
+            |logger: &mut logger::Logger, board: Board, flash_color: logger::Color| {
+                {
+                    let mut reports = reports_to_upload.lock().unwrap();
+                    reports.push(board);
+                }
 
-            logger.action("[ Please disconnect the device ]".to_string());
+                logger.action("[ Please disconnect the device ]".to_string());
+                logger.fill(flash_color);
 
-            usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
+                usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
-            logger.reset();
-        };
+                logger.reset();
+            };
 
         if let Err(e) = maybe_build_firmware(&options, &mut logger) {
             println!("Could not build firmware: {}", e);
@@ -272,10 +274,7 @@ fn main() {
             if err {
                 logger.error("-> Faulty power circuit");
 
-                logger.fill(logger::Color::Red);
-                sleep(Duration::from_secs(1));
-
-                wait_for_next_board(&mut logger, board);
+                wait_for_next_board(&mut logger, board, logger::Color::Red);
                 continue;
             }
 
@@ -309,7 +308,7 @@ fn main() {
                         logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut logger, board);
+                        wait_for_next_board(&mut logger, board, logger::Color::Red);
 
                         continue;
                     }
@@ -351,10 +350,7 @@ fn main() {
                         logger.error(&format!("Flashing: {}", e));
                         logger.error("-> Flashing failed");
 
-                        logger.fill(logger::Color::Red);
-                        sleep(Duration::from_secs(1));
-
-                        wait_for_next_board(&mut logger, board);
+                        wait_for_next_board(&mut logger, board, logger::Color::Red);
 
                         continue;
                     }
@@ -394,10 +390,7 @@ fn main() {
                             true,
                         ));
 
-                        logger.fill(logger::Color::Red);
-                        sleep(Duration::from_secs(1));
-
-                        wait_for_next_board(&mut logger, board);
+                        wait_for_next_board(&mut logger, board, logger::Color::Red);
 
                         continue;
                     }
@@ -413,50 +406,14 @@ fn main() {
 
                     esp.reset_no_delay().unwrap();
 
-                    let mut full_logs = String::new();
-
-                    let err = {
-                        let mut buffer = String::new();
-
-                        println!("Streaming logs from serial port...");
-                        println!("==================================");
-
-                        loop {
-                            let read = serial::read_string(&mut serial);
-                            if let Err(e) = read {
-                                logger.error(&format!("Failed to read logs: {}", e));
-                                break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
-                            }
-
-                            let str = read.unwrap();
-
-                            full_logs += &str;
-                            buffer += &str;
-
-                            if let Some(i) = buffer.rfind('\n') {
-                                let (line, rest) = buffer.split_at(i + 1);
-                                let l = line.to_owned();
-                                buffer = rest.to_string();
-
-                                println!("{}", l);
-
-                                if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") ||
-                                l.contains("[FATAL] [BNO080Sensor:0] Can't connect to"
-                            ) {
-                                logger.error("I2C to IMU faulty");
-                                break Err(full_logs);
-                            }
-
-                                if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
-                                    logger.success("I2C to IMU working");
-                                    break Ok(full_logs);
-                                }
-                            }
-                        }
-                    };
-
-                    match err {
+                    match serial::read_string_until(
+                        &mut serial,
+                        vec!["[INFO ] [BNO080Sensor:0] Connected to"],
+                        vec!["ERR", "[FATAL"],
+                    ) {
                         Ok(logs) => {
+                            logger.success("I2C to IMU working");
+
                             board.values.push(api::TestReportValue::new(
                                 "I2C to IMU",
                                 "I2C to IMU should work",
@@ -466,6 +423,7 @@ fn main() {
                             ));
                         }
                         Err(logs) => {
+                            logger.error("I2C to IMU faulty");
                             logger.error(&logs);
 
                             board.values.push(api::TestReportValue::new(
@@ -476,10 +434,7 @@ fn main() {
                                 true,
                             ));
 
-                            logger.fill(logger::Color::Red);
-                            sleep(Duration::from_secs(1));
-
-                            wait_for_next_board(&mut logger, board);
+                            wait_for_next_board(&mut logger, board, logger::Color::Red);
 
                             continue;
                         }
@@ -490,8 +445,6 @@ fn main() {
 
                 {
                     logger.in_progress("Checking IMU via `GET TEST` command...");
-
-                    let mut full_logs = String::new();
 
                     if let Err(e) = serial::write(&mut serial, b"GET TEST\n") {
                         logger.error(&format!("Failed to write to serial port: {}", e));
@@ -504,53 +457,16 @@ fn main() {
                             true,
                         ));
 
-                        logger.fill(logger::Color::Red);
-                        sleep(Duration::from_secs(1));
-
-                        wait_for_next_board(&mut logger, board);
+                        wait_for_next_board(&mut logger, board, logger::Color::Red);
 
                         continue;
                     }
 
-                    let err = {
-                        let mut buffer = String::new();
-
-                        println!("Streaming logs from serial port...");
-                        println!("==================================");
-
-                        loop {
-                            let read = serial::read_string(&mut serial);
-                            if let Err(e) = read {
-                                logger.error(&format!("Failed to read logs: {}", e));
-                                break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
-                            }
-
-                            let str = read.unwrap();
-
-                            full_logs += &str;
-                            buffer += &str;
-
-                            if let Some(i) = buffer.rfind('\n') {
-                                let (line, rest) = buffer.split_at(i + 1);
-                                let l = line.to_owned();
-                                buffer = rest.to_string();
-
-                                println!("{}", l);
-
-                                if l.contains("Sensor 1 didn't send any data yet!") {
-                                    logger.error("IMU faulty");
-                                    break Err(full_logs);
-                                }
-
-                                if l.contains("Sensor 1 sent some data, looks working.") {
-                                    logger.error("IMU working");
-                                    break Ok(full_logs);
-                                }
-                            }
-                        }
-                    };
-
-                    match err {
+                    match serial::read_string_until(
+                        &mut serial,
+                        vec!["Sensor 1 didn't send any data yet!"],
+                        vec!["Sensor 1 sent some data, looks working."],
+                    ) {
                         Ok(logs) => {
                             board.values.push(api::TestReportValue::new(
                                 "IMU test",
@@ -571,10 +487,7 @@ fn main() {
                                 true,
                             ));
 
-                            logger.fill(logger::Color::Red);
-                            sleep(Duration::from_secs(1));
-
-                            wait_for_next_board(&mut logger, board);
+                            wait_for_next_board(&mut logger, board, logger::Color::Red);
 
                             continue;
                         }
@@ -584,10 +497,7 @@ fn main() {
 
             logger.success("Board tested successfully");
 
-            logger.fill(logger::Color::Green);
-            sleep(Duration::from_secs(1));
-
-            wait_for_next_board(&mut logger, board);
+            wait_for_next_board(&mut logger, board, logger::Color::Green);
         }
     });
 
