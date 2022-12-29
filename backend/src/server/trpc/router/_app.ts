@@ -9,6 +9,7 @@ export const appRouter = router({
       z
         .object({
           onlyFailedReports: z.boolean().optional(),
+          id: z.string().optional(),
         })
         .and(DatabasePagination)
     )
@@ -27,6 +28,11 @@ export const appRouter = router({
         .then((reports) =>
           reports
             .map(TestReportToDto)
+            .filter(
+              (report) =>
+                input.id &&
+                report.id.toLowerCase().includes(input.id.toLowerCase())
+            )
             .filter(
               (report) =>
                 input.onlyFailedReports &&
