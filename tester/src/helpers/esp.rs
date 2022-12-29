@@ -32,17 +32,10 @@ impl ESP {
 
     pub fn reset_for_upload(&mut self) -> gpio::Result<()> {
         self.flash_pin.set_low();
-        self.rst_pin.set_low();
 
-        thread::sleep(time::Duration::from_millis(200));
-
-        self.rst_pin.set_high();
-
-        thread::sleep(time::Duration::from_millis(100));
+        self.reset()?;
 
         self.flash_pin.set_high();
-
-        thread::sleep(time::Duration::from_millis(100));
 
         Ok(())
     }
