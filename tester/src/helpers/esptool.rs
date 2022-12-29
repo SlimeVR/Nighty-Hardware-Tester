@@ -2,18 +2,15 @@ use std::{io, process};
 
 use rppal::gpio;
 
+use crate::esp;
+
 pub struct ReadMacAddressResult {
     pub mac: String,
     pub log: String,
 }
 
-pub fn read_mac_address(
-    flash_pin: &mut gpio::OutputPin,
-    rst_pin: &mut gpio::OutputPin,
-    enable_flashing: impl Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
-    reset_chip: impl Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
-) -> gpio::Result<ReadMacAddressResult> {
-    enable_flashing(flash_pin, rst_pin)?;
+pub fn read_mac_address(esp: &mut esp::ESP) -> gpio::Result<ReadMacAddressResult> {
+    esp.reset_for_upload()?;
 
     let c = process::Command::new("esptool")
         .arg("--port")
@@ -24,7 +21,7 @@ pub fn read_mac_address(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output);
 
-    reset_chip(rst_pin)?;
+    esp.reset()?;
 
     if !c.status.success() {
         return Err(gpio::Error::Io(io::Error::new(
@@ -57,14 +54,8 @@ pub fn read_mac_address(
     })
 }
 
-pub fn write_flash(
-    file: &str,
-    flash_pin: &mut gpio::OutputPin,
-    rst_pin: &mut gpio::OutputPin,
-    enable_flashing: impl Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
-    reset_chip: impl Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
-) -> gpio::Result<String> {
-    enable_flashing(flash_pin, rst_pin)?;
+pub fn write_flash(file: &str, esp: &mut esp::ESP) -> gpio::Result<String> {
+    esp.reset_for_upload()?;
 
     let c = process::Command::new("/usr/bin/python3")
         .arg("/home/pi/.platformio/packages/tool-esptoolpy/esptool.py")
@@ -88,7 +79,7 @@ pub fn write_flash(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output);
 
-    reset_chip(rst_pin)?;
+    esp.reset()?;
 
     if !c.status.success() {
         return Err(gpio::Error::Io(io::Error::new(

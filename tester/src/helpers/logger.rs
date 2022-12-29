@@ -1,12 +1,12 @@
 use colored::Colorize;
-use std::sync;
+use std::sync::mpsc;
 
 enum Event {
-    ReportEvent(ReportEvent),
-    ResetReport,
+    LogEvent(LogEvent),
+    ResetRenderer,
 }
 
-enum ReportEvent {
+enum LogEvent {
     Success(String),
     Error(String),
     InProgress(String),
@@ -18,34 +18,27 @@ pub enum Color {
     Green,
     Red,
 }
-pub struct TUI {
-    rx: sync::mpsc::Receiver<Event>,
-    tx: sync::mpsc::Sender<Event>,
-}
+pub struct LoggerBuilder {}
 
 pub struct Renderer {
-    rx: sync::mpsc::Receiver<Event>,
-    report_events: Vec<ReportEvent>,
+    rx: mpsc::Receiver<Event>,
+    events: Vec<LogEvent>,
 }
 
-pub struct Reporter {
-    tx: sync::mpsc::Sender<Event>,
+pub struct Logger {
+    tx: mpsc::Sender<Event>,
 }
 
-impl TUI {
-    pub fn new() -> Result<TUI, Box<dyn std::error::Error>> {
-        let (tx, rx) = sync::mpsc::channel::<Event>();
+impl LoggerBuilder {
+    pub fn split() -> (Renderer, Logger) {
+        let (tx, rx) = mpsc::channel::<Event>();
 
-        Ok(TUI { rx, tx })
-    }
-
-    pub fn split(self) -> (Renderer, Reporter) {
         (
             Renderer {
-                rx: self.rx,
-                report_events: Vec::new(),
+                rx,
+                events: Vec::new(),
             },
-            Reporter { tx: self.tx },
+            Logger { tx },
         )
     }
 }
@@ -61,14 +54,14 @@ impl Renderer {
         let (columns, rows) = crossterm::terminal::size().unwrap();
 
         let lines = self
-            .report_events
+            .events
             .iter()
             .map(|e| match &e {
-                ReportEvent::Success(s) => Some((colored::Color::Green, s)),
-                ReportEvent::Error(s) => Some((colored::Color::Red, s)),
-                ReportEvent::InProgress(s) => Some((colored::Color::White, s)),
-                ReportEvent::Action(s) => Some((colored::Color::BrightBlue, s)),
-                ReportEvent::Fill(_) => None,
+                LogEvent::Success(s) => Some((colored::Color::Green, s)),
+                LogEvent::Error(s) => Some((colored::Color::Red, s)),
+                LogEvent::InProgress(s) => Some((colored::Color::White, s)),
+                LogEvent::Action(s) => Some((colored::Color::BrightBlue, s)),
+                LogEvent::Fill(_) => None,
             })
             .filter_map(|e| e)
             .map(|(color, s)| format!("{}", s.color(color)))
@@ -76,7 +69,7 @@ impl Renderer {
 
         println!("{}", lines.join("\n"));
 
-        if let Some(ReportEvent::Fill(color)) = self.report_events.last() {
+        if let Some(LogEvent::Fill(color)) = self.events.last() {
             let color = match color {
                 Color::Green => colored::Color::Green,
                 Color::Red => colored::Color::Red,
@@ -96,26 +89,26 @@ impl Renderer {
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
             match self.rx.recv()? {
-                Event::ReportEvent(msg) => {
+                Event::LogEvent(msg) => {
                     match msg {
-                        ReportEvent::InProgress(_) => {
-                            self.report_events.push(msg);
+                        LogEvent::InProgress(_) => {
+                            self.events.push(msg);
                         }
                         _ => {
-                            if let Some(last_event) = self.report_events.last() {
-                                if let ReportEvent::InProgress(_) = last_event {
-                                    self.report_events.pop();
+                            if let Some(last_event) = self.events.last() {
+                                if let LogEvent::InProgress(_) = last_event {
+                                    self.events.pop();
                                 }
                             }
 
-                            self.report_events.push(msg);
+                            self.events.push(msg);
                         }
                     }
 
                     self.draw()?;
                 }
-                Event::ResetReport => {
-                    self.report_events.clear();
+                Event::ResetRenderer => {
+                    self.events.clear();
                     self.draw()?;
                 }
             }
@@ -123,42 +116,38 @@ impl Renderer {
     }
 }
 
-impl Reporter {
+impl Logger {
     pub fn success(&mut self, msg: &str) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::Success(
-                "✓ ".to_string() + msg,
-            )))
+            .send(Event::LogEvent(LogEvent::Success("✓ ".to_string() + msg)))
             .unwrap();
     }
 
     pub fn error(&mut self, msg: &str) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::Error(
-                "╳ ".to_string() + msg,
-            )))
+            .send(Event::LogEvent(LogEvent::Error("╳ ".to_string() + msg)))
             .unwrap();
     }
 
     pub fn in_progress(&mut self, msg: impl ToString) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::InProgress(msg.to_string())))
+            .send(Event::LogEvent(LogEvent::InProgress(msg.to_string())))
             .unwrap();
     }
 
     pub fn action(&mut self, msg: impl ToString) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::Action(msg.to_string())))
+            .send(Event::LogEvent(LogEvent::Action(msg.to_string())))
             .unwrap();
     }
 
     pub fn fill(&mut self, color: Color) {
         self.tx
-            .send(Event::ReportEvent(ReportEvent::Fill(color)))
+            .send(Event::LogEvent(LogEvent::Fill(color)))
             .unwrap();
     }
 
     pub fn reset(&mut self) {
-        self.tx.send(Event::ResetReport).unwrap();
+        self.tx.send(Event::ResetRenderer).unwrap();
     }
 }

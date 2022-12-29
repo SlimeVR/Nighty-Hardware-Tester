@@ -2,6 +2,8 @@ use std::{io, process};
 
 use rppal::gpio;
 
+use crate::esp;
+
 pub fn build(environment: &str) -> gpio::Result<()> {
     let c = process::Command::new("pio")
         .arg("run")
@@ -23,14 +25,8 @@ pub fn build(environment: &str) -> gpio::Result<()> {
     Ok(())
 }
 
-pub fn flash(
-    environment: &str,
-    flash_pin: &mut gpio::OutputPin,
-    rst_pin: &mut gpio::OutputPin,
-    enable_flashing: impl Fn(&mut gpio::OutputPin, &mut gpio::OutputPin) -> gpio::Result<()>,
-    reset_chip: impl Fn(&mut gpio::OutputPin) -> gpio::Result<()>,
-) -> gpio::Result<String> {
-    enable_flashing(flash_pin, rst_pin)?;
+pub fn flash(environment: &str, esp: &mut esp::ESP) -> gpio::Result<String> {
+    esp.reset_for_upload()?;
 
     let c = process::Command::new("pio")
         .arg("run")
@@ -46,7 +42,7 @@ pub fn flash(
     let output = String::from_utf8_lossy(&c.stdout);
     println!("{}", output);
 
-    reset_chip(rst_pin)?;
+    esp.reset()?;
 
     if !c.status.success() {
         return Err(gpio::Error::Io(io::Error::new(

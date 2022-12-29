@@ -1,8 +1,5 @@
 use ads1x1x::ChannelSelection;
-use rppal::{
-    gpio::{Gpio, OutputPin},
-    i2c::I2c,
-};
+use rppal::{gpio, i2c};
 use serde::{Deserialize, Serialize};
 use serialport::SerialPort;
 use std::{
@@ -15,53 +12,12 @@ use std::{
 };
 use tester::{
     adc,
-    api::{
-        ApiRequestBody, ApiRequestBodyParams::ApiRequestBodyInsertTestReport, TestReport,
-        TestReportValue,
-    },
-    esptool::{self, ReadMacAddressResult},
-    pio, tui, usb,
+    api::{self, TestReportValue},
+    esp, esptool, logger, pio, usb,
 };
-use uuid::Uuid;
 
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
-
-fn reset_esp_no_delay(pin: &mut OutputPin) -> rppal::gpio::Result<()> {
-    pin.set_low();
-
-    sleep(Duration::from_millis(200));
-
-    pin.set_high();
-
-    Ok(())
-}
-
-fn reset_esp(pin: &mut OutputPin) -> rppal::gpio::Result<()> {
-    reset_esp_no_delay(pin)?;
-
-    sleep(Duration::from_millis(100));
-
-    Ok(())
-}
-
-fn enable_flashing(flash_pin: &mut OutputPin, rst_pin: &mut OutputPin) -> rppal::gpio::Result<()> {
-    flash_pin.set_low();
-
-    rst_pin.set_low();
-
-    sleep(Duration::from_millis(200));
-
-    rst_pin.set_high();
-
-    sleep(Duration::from_millis(100));
-
-    flash_pin.set_high();
-
-    sleep(Duration::from_millis(100));
-
-    Ok(())
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Board {
@@ -89,49 +45,52 @@ fn main() {
     let rpc_url = env::var("TESTER_RPC_URL").unwrap();
     let rpc_password = env::var("TESTER_RPC_PASSWORD").unwrap();
 
-    let t = tui::TUI::new().unwrap();
+    let (mut renderer, mut logger) = logger::LoggerBuilder::split();
 
-    let (mut renderer, mut reporter) = t.split();
     let boards_to_upload: Arc<Mutex<Vec<Board>>> = Arc::new(Mutex::new(Vec::new()));
 
     let reports_to_upload_clone = boards_to_upload.clone();
     spawn(move || {
         let reports_to_upload = reports_to_upload_clone;
 
-        let wait_for_next_board = |reporter: &mut tui::Reporter, board: Board| {
+        let wait_for_next_board = |logger: &mut logger::Logger, board: Board| {
             {
                 let mut reports = reports_to_upload.lock().unwrap();
                 reports.push(board);
             }
 
-            reporter.action("[ Please disconnect the device ]".to_string());
+            logger.action("[ Please disconnect the device ]".to_string());
 
             usb::wait_until_device_is_disconnected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
-            reporter.reset();
+            logger.reset();
         };
 
         if flash_with_pio {
-            reporter.in_progress("Skipping firmware build, flashing with PlatformIO...");
+            logger.in_progress("Skipping firmware build, flashing with PlatformIO...");
             sleep(Duration::from_millis(500));
-            reporter.reset();
+            logger.reset();
         } else {
             if env::var("TESTER_NO_BUILD").unwrap_or("0".to_string()) == "1" {
-                reporter.in_progress("Skipping firmware build, building disabled via env...");
+                logger.in_progress("Skipping firmware build, building disabled via env...");
                 sleep(Duration::from_millis(500));
-                reporter.reset();
+                logger.reset();
             } else {
-                reporter.in_progress("Building firmware...");
+                logger.in_progress("Building firmware...");
                 pio::build("esp12e").unwrap();
-                reporter.reset();
+                logger.reset();
             }
         }
 
-        let i2c = I2c::with_bus(1).unwrap();
-        let gpio = Gpio::new().unwrap();
+        let i2c = i2c::I2c::with_bus(1).unwrap();
+        let gpio = gpio::Gpio::new().unwrap();
 
-        let mut rst_pin = gpio.get(6).unwrap().into_output_high();
-        let mut flash_pin = gpio.get(22).unwrap().into_output_high();
+        let mut esp = {
+            let rst_pin = gpio.get(6).unwrap().into_output_high();
+            let flash_pin = gpio.get(22).unwrap().into_output_high();
+
+            esp::ESP::new(rst_pin, flash_pin)
+        };
 
         let mut adc = adc::Ads1115::new(i2c).unwrap();
 
@@ -141,15 +100,15 @@ fn main() {
                 values: Vec::new(),
             };
 
-            reporter.action("[ Please connect the device ]".to_string());
+            logger.action("[ Please connect the device ]".to_string());
 
             usb::wait_until_device_is_connected(USB_VENDOR_ID, USB_PRODUCT_ID);
 
             sleep(Duration::from_millis(250));
 
-            reporter.reset();
+            logger.reset();
 
-            reporter.success("Device connected");
+            logger.success("Device connected");
 
             let err = {
                 match adc.measure(ChannelSelection::SingleA2) {
@@ -195,14 +154,14 @@ fn main() {
                     },
                 };
 
-                reporter.in_progress("Measuring B+...");
+                logger.in_progress("Measuring B+...");
                 let bplus_err = match adc.measure(ChannelSelection::SingleA3) {
                     Ok(v) => {
                         let bplus_err = v < 4.0;
                         if bplus_err {
-                            reporter.error(&format!("B+ voltage: {}V (> 4.0V)", v));
+                            logger.error(&format!("B+ voltage: {}V (> 4.0V)", v));
                         } else {
-                            reporter.success(&format!("B+ voltage: {}V", v));
+                            logger.success(&format!("B+ voltage: {}V", v));
                         }
 
                         board.values.push(TestReportValue::new(
@@ -254,14 +213,14 @@ fn main() {
                     },
                 };
 
-                reporter.in_progress("Measuring 3V3...");
+                logger.in_progress("Measuring 3V3...");
                 let r3v3_err = match adc.measure(ChannelSelection::SingleA0) {
                     Ok(v) => {
                         let r3v3_err = v < 2.8 || v > 3.2;
                         if r3v3_err {
-                            reporter.error(&format!("3V3 voltage: {}V (> 2.8V < 3.2V)", v));
+                            logger.error(&format!("3V3 voltage: {}V (> 2.8V < 3.2V)", v));
                         } else {
-                            reporter.success(&format!("3V3 voltage: {}V", v));
+                            logger.success(&format!("3V3 voltage: {}V", v));
                         }
 
                         board.values.push(TestReportValue::new(
@@ -317,24 +276,19 @@ fn main() {
             };
 
             if err {
-                reporter.error("-> Faulty power circuit");
+                logger.error("-> Faulty power circuit");
 
-                reporter.fill(tui::Color::Red);
+                logger.fill(logger::Color::Red);
                 sleep(Duration::from_secs(1));
 
-                wait_for_next_board(&mut reporter, board);
+                wait_for_next_board(&mut logger, board);
                 continue;
             }
 
             {
-                reporter.in_progress("Reading MAC address...");
-                match esptool::read_mac_address(
-                    &mut flash_pin,
-                    &mut rst_pin,
-                    &enable_flashing,
-                    &reset_esp,
-                ) {
-                    Ok(ReadMacAddressResult { mac, log }) => {
+                logger.in_progress("Reading MAC address...");
+                match esptool::read_mac_address(&mut esp) {
+                    Ok(esptool::ReadMacAddressResult { mac, log }) => {
                         board.mac = Some(mac.clone());
                         board.values.push(TestReportValue::new(
                             "Read MAC address",
@@ -344,7 +298,7 @@ fn main() {
                             false,
                         ));
 
-                        reporter.success(&format!("Read MAC address: {}", mac));
+                        logger.success(&format!("Read MAC address: {}", mac));
                     }
                     Err(e) => {
                         board.values.push(TestReportValue::new(
@@ -355,13 +309,13 @@ fn main() {
                             true,
                         ));
 
-                        reporter.error(&format!("Failed to read MAC address: {}", e));
-                        reporter.error("-> ESP8266 faulty");
+                        logger.error(&format!("Failed to read MAC address: {}", e));
+                        logger.error("-> ESP8266 faulty");
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
@@ -369,22 +323,13 @@ fn main() {
             };
 
             {
-                reporter.in_progress("Flashing...");
+                logger.in_progress("Flashing...");
                 match if flash_with_pio {
-                    pio::flash(
-                        "esp12e",
-                        &mut flash_pin,
-                        &mut rst_pin,
-                        &enable_flashing,
-                        &reset_esp,
-                    )
+                    pio::flash("esp12e", &mut esp)
                 } else {
                     esptool::write_flash(
                         "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
-                        &mut flash_pin,
-                        &mut rst_pin,
-                        &enable_flashing,
-                        &reset_esp,
+                        &mut esp,
                     )
                 } {
                     Ok(logs) => {
@@ -396,7 +341,7 @@ fn main() {
                             false,
                         ));
 
-                        reporter.success("Flashed");
+                        logger.success("Flashed");
                     }
                     Err(e) => {
                         board.values.push(TestReportValue::new(
@@ -407,13 +352,13 @@ fn main() {
                             true,
                         ));
 
-                        reporter.error(&format!("Flashing: {}", e));
-                        reporter.error("-> Flashing failed");
+                        logger.error(&format!("Flashing: {}", e));
+                        logger.error("-> Flashing failed");
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
@@ -421,9 +366,7 @@ fn main() {
             };
 
             {
-                reset_esp_no_delay(&mut rst_pin).unwrap();
-
-                reporter.in_progress("Connecting to serial port...");
+                logger.in_progress("Connecting to serial port...");
 
                 let serial = serialport::new("/dev/ttyUSB0", 115200)
                     .timeout(Duration::from_millis(10000))
@@ -440,12 +383,12 @@ fn main() {
                             false,
                         ));
 
-                        reporter.success("Serial port opened");
+                        logger.success("Serial port opened");
 
                         serial
                     }
                     Err(error) => {
-                        reporter.error(format!("Failed to open serial port: {}", error).as_str());
+                        logger.error(format!("Failed to open serial port: {}", error).as_str());
 
                         board.values.push(TestReportValue::new(
                             "Serial",
@@ -455,18 +398,24 @@ fn main() {
                             true,
                         ));
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
                 };
 
+                if let Err(e) = serial.clear(serialport::ClearBuffer::All) {
+                    println!("(warn) failed to clear serial port: {}", e);
+                }
+
                 // Read serial logs for checking the logs for sensor errors
                 {
-                    reporter.in_progress("Checking I2C connection to IMU...");
+                    logger.in_progress("Checking I2C connection to IMU...");
+
+                    esp.reset_no_delay().unwrap();
 
                     let mut full_logs = String::new();
 
@@ -479,7 +428,7 @@ fn main() {
                         loop {
                             let read = read_serial(&mut serial);
                             if let Err(e) = read {
-                                reporter.error(&format!("Failed to read logs: {}", e));
+                                logger.error(&format!("Failed to read logs: {}", e));
                                 break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
                             }
 
@@ -500,12 +449,12 @@ fn main() {
                                 if l.contains("[ERR] I2C: Can't find I2C device on provided addresses, scanning for all I2C devices and returning") ||
                                 l.contains("[FATAL] [BNO080Sensor:0] Can't connect to"
                             ) {
-                                reporter.error("I2C to IMU faulty");
+                                logger.error("I2C to IMU faulty");
                                 break Err(full_logs);
                             }
 
                                 if l.contains("[INFO ] [BNO080Sensor:0] Connected to") {
-                                    reporter.success("I2C to IMU working");
+                                    logger.success("I2C to IMU working");
                                     break Ok(full_logs);
                                 }
                             }
@@ -523,7 +472,7 @@ fn main() {
                             ));
                         }
                         Err(logs) => {
-                            reporter.error(&logs);
+                            logger.error(&logs);
 
                             board.values.push(TestReportValue::new(
                                 "I2C to IMU",
@@ -533,10 +482,10 @@ fn main() {
                                 true,
                             ));
 
-                            reporter.fill(tui::Color::Red);
+                            logger.fill(logger::Color::Red);
                             sleep(Duration::from_secs(1));
 
-                            wait_for_next_board(&mut reporter, board);
+                            wait_for_next_board(&mut logger, board);
 
                             continue;
                         }
@@ -546,12 +495,12 @@ fn main() {
                 sleep(Duration::from_millis(100));
 
                 {
-                    reporter.in_progress("Checking IMU via `GET TEST` command...");
+                    logger.in_progress("Checking IMU via `GET TEST` command...");
 
                     let mut full_logs = String::new();
 
                     if let Err(e) = serial.write_all(b"GET TEST\n") {
-                        reporter.error(&format!("Failed to write to serial port: {}", e));
+                        logger.error(&format!("Failed to write to serial port: {}", e));
 
                         board.values.push(TestReportValue::new(
                             "IMU test",
@@ -561,10 +510,10 @@ fn main() {
                             true,
                         ));
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
@@ -572,7 +521,7 @@ fn main() {
                     println!("Wrote `GET TEST\\n` to serial port");
 
                     if let Err(e) = serial.flush() {
-                        reporter.error(&format!("Failed to flush serial port: {}", e));
+                        logger.error(&format!("Failed to flush serial port: {}", e));
 
                         board.values.push(TestReportValue::new(
                             "IMU test",
@@ -582,10 +531,10 @@ fn main() {
                             true,
                         ));
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
@@ -593,7 +542,7 @@ fn main() {
                     println!("Flushed serial port");
 
                     if let Err(e) = serial.write_all(b"GET TEST\n") {
-                        reporter.error(&format!("Failed to write to serial port: {}", e));
+                        logger.error(&format!("Failed to write to serial port: {}", e));
 
                         board.values.push(TestReportValue::new(
                             "IMU test",
@@ -603,10 +552,10 @@ fn main() {
                             true,
                         ));
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
@@ -614,7 +563,7 @@ fn main() {
                     println!("Wrote `GET TEST\\n` to serial port");
 
                     if let Err(e) = serial.flush() {
-                        reporter.error(&format!("Failed to flush serial port: {}", e));
+                        logger.error(&format!("Failed to flush serial port: {}", e));
 
                         board.values.push(TestReportValue::new(
                             "IMU test",
@@ -624,10 +573,10 @@ fn main() {
                             true,
                         ));
 
-                        reporter.fill(tui::Color::Red);
+                        logger.fill(logger::Color::Red);
                         sleep(Duration::from_secs(1));
 
-                        wait_for_next_board(&mut reporter, board);
+                        wait_for_next_board(&mut logger, board);
 
                         continue;
                     }
@@ -643,7 +592,7 @@ fn main() {
                         loop {
                             let read = read_serial(&mut serial);
                             if let Err(e) = read {
-                                reporter.error(&format!("Failed to read logs: {}", e));
+                                logger.error(&format!("Failed to read logs: {}", e));
                                 break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
                             }
 
@@ -662,12 +611,12 @@ fn main() {
                                 println!("{}", l);
 
                                 if l.contains("Sensor 1 didn't send any data yet!") {
-                                    reporter.error("IMU faulty");
+                                    logger.error("IMU faulty");
                                     break Err(full_logs);
                                 }
 
                                 if l.contains("Sensor 1 sent some data, looks working.") {
-                                    reporter.error("IMU working");
+                                    logger.error("IMU working");
                                     break Ok(full_logs);
                                 }
                             }
@@ -685,7 +634,7 @@ fn main() {
                             ));
                         }
                         Err(logs) => {
-                            reporter.error(&logs);
+                            logger.error(&logs);
 
                             board.values.push(TestReportValue::new(
                                 "IMU test",
@@ -695,10 +644,10 @@ fn main() {
                                 true,
                             ));
 
-                            reporter.fill(tui::Color::Red);
+                            logger.fill(logger::Color::Red);
                             sleep(Duration::from_secs(1));
 
-                            wait_for_next_board(&mut reporter, board);
+                            wait_for_next_board(&mut logger, board);
 
                             continue;
                         }
@@ -706,16 +655,18 @@ fn main() {
                 };
             }
 
-            reporter.success("Board tested successfully");
+            logger.success("Board tested successfully");
 
-            reporter.fill(tui::Color::Green);
+            logger.fill(logger::Color::Green);
             sleep(Duration::from_secs(1));
 
-            wait_for_next_board(&mut reporter, board);
+            wait_for_next_board(&mut logger, board);
         }
     });
 
     spawn(move || {
+        let client = api::Client::new(rpc_url, rpc_password);
+
         let mut upload_failed_boards = {
             let failed_boards = read_to_string("failed_boards.json").unwrap_or("[]".to_string());
 
@@ -733,22 +684,16 @@ fn main() {
             };
 
             for board in board_tests_to_upload {
-                let body = ApiRequestBody {
-                    method: "insert_test_report".to_string(),
-                    params: ApiRequestBodyInsertTestReport(TestReport {
-                        id: board.mac.clone().unwrap_or(Uuid::new_v4().to_string()),
-                        _type: "main-board".to_string(),
-                        values: board.values.clone(),
-                    }),
-                };
+                if let None = board.mac {
+                    println!("Board has no MAC address, skipping upload");
+                    continue;
+                }
 
-                let client = reqwest::blocking::Client::new();
-                match client
-                    .post(&rpc_url)
-                    .header("authorization", &rpc_password)
-                    .json(&body)
-                    .send()
-                {
+                match client.send_test_report(
+                    "main-board",
+                    board.mac.clone().unwrap(),
+                    &board.values,
+                ) {
                     Ok(s) => {
                         if s.status() != reqwest::StatusCode::OK {
                             let e = s.text().unwrap();
