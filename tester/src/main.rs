@@ -1,20 +1,15 @@
 use ads1x1x::ChannelSelection;
 use rppal::{gpio, i2c};
 use serde::{Deserialize, Serialize};
-use serialport::SerialPort;
 use std::{
     env,
     fs::{read_to_string, File},
-    io::{Read, Write},
+    io::Write,
     sync::{Arc, Mutex},
     thread::{sleep, spawn},
     time::Duration,
 };
-use tester::{
-    adc,
-    api::{self, TestReportValue},
-    esp, esptool, logger, pio, serial, usb,
-};
+use tester::{adc, api, esp, esptool, logger, pio, serial, usb};
 
 const USB_VENDOR_ID: u16 = 0x1a86;
 const USB_PRODUCT_ID: u16 = 0x7523;
@@ -22,7 +17,7 @@ const USB_PRODUCT_ID: u16 = 0x7523;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Board {
     mac: Option<String>,
-    values: Vec<TestReportValue>,
+    values: Vec<api::TestReportValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,7 +99,7 @@ fn main() {
             let err = {
                 match adc.measure(ChannelSelection::SingleA2) {
                     Ok(v) => {
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Measure VOUT",
                             "none",
                             v.to_string() + "V",
@@ -114,7 +109,7 @@ fn main() {
                     }
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "Measure VOUT",
                                 "none",
                                 "N/A",
@@ -124,7 +119,7 @@ fn main() {
                         }
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
-                                board.values.push(TestReportValue::new(
+                                board.values.push(api::TestReportValue::new(
                                     "Measure VOUT",
                                     "none",
                                     "N/A",
@@ -133,7 +128,7 @@ fn main() {
                                 ));
                             }
                             ads1x1x::Error::InvalidInputData => {
-                                board.values.push(TestReportValue::new(
+                                board.values.push(api::TestReportValue::new(
                                     "Measure VOUT",
                                     "none",
                                     "N/A",
@@ -155,7 +150,7 @@ fn main() {
                             logger.success(&format!("B+ voltage: {}V", v));
                         }
 
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Measure B+",
                             "B+ > 4.0V",
                             v.to_string() + "V",
@@ -167,7 +162,7 @@ fn main() {
                     }
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "Measure B+",
                                 "B+ > 4.0V",
                                 "N/A",
@@ -179,7 +174,7 @@ fn main() {
                         }
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
-                                board.values.push(TestReportValue::new(
+                                board.values.push(api::TestReportValue::new(
                                     "Measure B+",
                                     "B+ > 4.0V",
                                     "N/A",
@@ -190,7 +185,7 @@ fn main() {
                                 true
                             }
                             ads1x1x::Error::InvalidInputData => {
-                                board.values.push(TestReportValue::new(
+                                board.values.push(api::TestReportValue::new(
                                     "Measure B+",
                                     "B+ > 4.0V",
                                     "N/A",
@@ -214,7 +209,7 @@ fn main() {
                             logger.success(&format!("3V3 voltage: {}V", v));
                         }
 
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Measure 3V3",
                             "2.8V > 3V3 < 3.2V",
                             v.to_string() + "V",
@@ -226,7 +221,7 @@ fn main() {
                     }
                     Err(e) => match e {
                         nb::Error::WouldBlock => {
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "Measure 3V3",
                                 "2.8V > 3V3 < 3.2V",
                                 "N/A",
@@ -238,7 +233,7 @@ fn main() {
                         }
                         nb::Error::Other(e) => match e {
                             ads1x1x::Error::I2C(e) => {
-                                board.values.push(TestReportValue::new(
+                                board.values.push(api::TestReportValue::new(
                                     "Measure 3V3",
                                     "2.8V > 3V3 < 3.2V",
                                     "N/A",
@@ -249,7 +244,7 @@ fn main() {
                                 true
                             }
                             ads1x1x::Error::InvalidInputData => {
-                                board.values.push(TestReportValue::new(
+                                board.values.push(api::TestReportValue::new(
                                     "Measure 3V3",
                                     "2.8V > 3V3 < 3.2V",
                                     "N/A",
@@ -281,7 +276,7 @@ fn main() {
                 match esptool::read_mac_address(&mut esp) {
                     Ok(esptool::ReadMacAddressResult { mac, log }) => {
                         board.mac = Some(mac.clone());
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Read MAC address",
                             "MAC address should be readable",
                             mac.clone(),
@@ -292,7 +287,7 @@ fn main() {
                         logger.success(&format!("Read MAC address: {}", mac));
                     }
                     Err(e) => {
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Read MAC address",
                             "MAC address should be readable",
                             "N/A",
@@ -324,7 +319,7 @@ fn main() {
                     )
                 } {
                     Ok(logs) => {
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Flashing",
                             "Flashing should work",
                             true,
@@ -335,7 +330,7 @@ fn main() {
                         logger.success("Flashed");
                     }
                     Err(e) => {
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Flashing",
                             "Flashing should work",
                             false,
@@ -366,7 +361,7 @@ fn main() {
 
                 let mut serial = match serial {
                     Ok(serial) => {
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Serial",
                             "Serial should work",
                             true,
@@ -381,7 +376,7 @@ fn main() {
                     Err(error) => {
                         logger.error(format!("Failed to open serial port: {}", error).as_str());
 
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "Serial",
                             "Serial should work",
                             false,
@@ -452,7 +447,7 @@ fn main() {
 
                     match err {
                         Ok(logs) => {
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "I2C to IMU",
                                 "I2C to IMU should work",
                                 true,
@@ -463,7 +458,7 @@ fn main() {
                         Err(logs) => {
                             logger.error(&logs);
 
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "I2C to IMU",
                                 "I2C to IMU should work",
                                 false,
@@ -491,7 +486,7 @@ fn main() {
                     if let Err(e) = serial::write(&mut serial, b"GET TEST\n") {
                         logger.error(&format!("Failed to write to serial port: {}", e));
 
-                        board.values.push(TestReportValue::new(
+                        board.values.push(api::TestReportValue::new(
                             "IMU test",
                             "IMU test should work",
                             false,
@@ -547,7 +542,7 @@ fn main() {
 
                     match err {
                         Ok(logs) => {
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "IMU test",
                                 "IMU test should work",
                                 true,
@@ -558,7 +553,7 @@ fn main() {
                         Err(logs) => {
                             logger.error(&logs);
 
-                            board.values.push(TestReportValue::new(
+                            board.values.push(api::TestReportValue::new(
                                 "IMU test",
                                 "IMU test should work",
                                 false,
