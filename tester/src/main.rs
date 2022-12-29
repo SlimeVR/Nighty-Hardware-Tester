@@ -464,8 +464,8 @@ fn main() {
 
                     match serial::read_string_until(
                         &mut serial,
-                        vec!["Sensor 1 didn't send any data yet!"],
                         vec!["Sensor 1 sent some data, looks working."],
+                        vec!["Sensor 1 didn't send any data yet!"],
                     ) {
                         Ok(logs) => {
                             board.values.push(api::TestReportValue::new(
