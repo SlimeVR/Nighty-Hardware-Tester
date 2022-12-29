@@ -13,7 +13,7 @@ use std::{
 use tester::{
     adc,
     api::{self, TestReportValue},
-    esp, esptool, logger, pio, usb,
+    esp, esptool, logger, pio, serial, usb,
 };
 
 const USB_VENDOR_ID: u16 = 0x1a86;
@@ -29,15 +29,6 @@ struct Board {
 struct BoardUploadFailure {
     board: Board,
     error: String,
-}
-
-fn read_serial(serial: &mut Box<dyn SerialPort>) -> Result<([u8; 128], usize), String> {
-    let mut buf = [0; 128];
-
-    match serial.read(&mut buf) {
-        Ok(bytes_read) => Ok((buf, bytes_read)),
-        Err(e) => return Err(format!("could not read from serial port: {}", e)),
-    }
 }
 
 fn main() {
@@ -426,15 +417,13 @@ fn main() {
                         println!("==================================");
 
                         loop {
-                            let read = read_serial(&mut serial);
+                            let read = serial::read_string(&mut serial);
                             if let Err(e) = read {
                                 logger.error(&format!("Failed to read logs: {}", e));
                                 break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
                             }
 
-                            let (buf, bytes_read) = read.unwrap();
-                            let str =
-                                String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
+                            let str = read.unwrap();
 
                             full_logs += &str;
                             buffer += &str;
@@ -499,7 +488,7 @@ fn main() {
 
                     let mut full_logs = String::new();
 
-                    if let Err(e) = serial.write_all(b"GET TEST\n") {
+                    if let Err(e) = serial::write(&mut serial, b"GET TEST\n") {
                         logger.error(&format!("Failed to write to serial port: {}", e));
 
                         board.values.push(TestReportValue::new(
@@ -517,71 +506,6 @@ fn main() {
 
                         continue;
                     }
-
-                    println!("Wrote `GET TEST\\n` to serial port");
-
-                    if let Err(e) = serial.flush() {
-                        logger.error(&format!("Failed to flush serial port: {}", e));
-
-                        board.values.push(TestReportValue::new(
-                            "IMU test",
-                            "IMU test should work",
-                            false,
-                            Some(format!("Failed to flush serial port: {}", e)),
-                            true,
-                        ));
-
-                        logger.fill(logger::Color::Red);
-                        sleep(Duration::from_secs(1));
-
-                        wait_for_next_board(&mut logger, board);
-
-                        continue;
-                    }
-
-                    println!("Flushed serial port");
-
-                    if let Err(e) = serial.write_all(b"GET TEST\n") {
-                        logger.error(&format!("Failed to write to serial port: {}", e));
-
-                        board.values.push(TestReportValue::new(
-                            "IMU test",
-                            "IMU test should work",
-                            false,
-                            Some(format!("Failed to write to serial port: {}", e)),
-                            true,
-                        ));
-
-                        logger.fill(logger::Color::Red);
-                        sleep(Duration::from_secs(1));
-
-                        wait_for_next_board(&mut logger, board);
-
-                        continue;
-                    }
-
-                    println!("Wrote `GET TEST\\n` to serial port");
-
-                    if let Err(e) = serial.flush() {
-                        logger.error(&format!("Failed to flush serial port: {}", e));
-
-                        board.values.push(TestReportValue::new(
-                            "IMU test",
-                            "IMU test should work",
-                            false,
-                            Some(format!("Failed to flush serial port: {}", e)),
-                            true,
-                        ));
-
-                        logger.fill(logger::Color::Red);
-                        sleep(Duration::from_secs(1));
-
-                        wait_for_next_board(&mut logger, board);
-
-                        continue;
-                    }
-
-                    println!("Flushed serial port");
 
                     let err = {
                         let mut buffer = String::new();
@@ -590,15 +514,13 @@ fn main() {
                         println!("==================================");
 
                         loop {
-                            let read = read_serial(&mut serial);
+                            let read = serial::read_string(&mut serial);
                             if let Err(e) = read {
                                 logger.error(&format!("Failed to read logs: {}", e));
                                 break Err(format!("Failed to read logs: {}\n{}", e, full_logs));
                             }
 
-                            let (buf, bytes_read) = read.unwrap();
-                            let str =
-                                String::from_utf8_lossy(&buf[..bytes_read]).replace('\u{0000}', "");
+                            let str = read.unwrap();
 
                             full_logs += &str;
                             buffer += &str;
