@@ -76,7 +76,7 @@ pub fn read_string_until(
             if line.contains(n) {
                 println!("> {}", line.color(colored::Color::BrightBlack));
 
-                return Err(format!("negative match: {}", n));
+                return Err(lines.join("\n") + &format!("\nnegative match: {}", line));
             }
         }
 
