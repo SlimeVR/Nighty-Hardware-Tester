@@ -5,12 +5,9 @@ module.exports = {
     extend: {
       colors: {
         bg: "#0A0A10",
-        card: "#14191E",
+        card: "#161720",
         field: "#202B32",
       },
-      width: {
-        '4/12-without-gap': 'calc(33.333333% - 1rem)'
-      }
     },
   },
   plugins: [],
