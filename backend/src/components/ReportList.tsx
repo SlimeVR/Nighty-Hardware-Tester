@@ -2,10 +2,10 @@ import { FC } from "react";
 import { trpc } from "../utils/trpc";
 import { ReportComponent } from "./Report";
 
-export const ReportList: FC<{ id?: string; onlyFailedReports: boolean }> = ({
-  id,
-  onlyFailedReports,
-}) => {
+export const ReportList: FC<{
+  id: string | null;
+  onlyFailedReports: boolean;
+}> = ({ id, onlyFailedReports }) => {
   const { data: reports, error } = trpc.reports.useQuery({
     limit: 100,
     offset: 0,

@@ -7,9 +7,9 @@ import { ReportList } from "../components/ReportList";
 
 const Home: NextPage = () => {
   const [onlyFailedReports, setOnlyFailedReports] = useState(false);
-  const [id, setId] = useState<string | undefined>();
+  const [id, setId] = useState<string | null>(null);
 
-  const setIdInner = (q: string) => setId(q === "" ? undefined : q);
+  const setIdInner = (q: string) => setId(q === "" ? null : q);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSetSearch = useMemo(() => debounce(setIdInner, 250), [setId]);
 

@@ -8,8 +8,8 @@ export const appRouter = router({
     .input(
       z
         .object({
-          onlyFailedReports: z.boolean().optional(),
-          id: z.string().optional(),
+          onlyFailedReports: z.boolean(),
+          id: z.string().nullable(),
         })
         .and(DatabasePagination)
     )
@@ -24,21 +24,14 @@ export const appRouter = router({
           orderBy: {
             testedAt: "desc",
           },
+          where: {
+            id: input.id === null ? undefined : { search: input.id },
+            values: input.onlyFailedReports
+              ? { some: { failed: input.onlyFailedReports } }
+              : undefined,
+          },
         })
-        .then((reports) =>
-          reports
-            .map(TestReportToDto)
-            .filter(
-              (report) =>
-                !input.id ||
-                report.id.toLowerCase().includes(input.id.toLowerCase())
-            )
-            .filter(
-              (report) =>
-                !input.onlyFailedReports ||
-                report.values.some((value) => value.failed)
-            )
-        )
+        .then((reports) => reports.map(TestReportToDto))
     ),
 });
 
