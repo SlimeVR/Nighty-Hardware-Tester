@@ -8,6 +8,10 @@ module.exports = {
         card: "#161720",
         field: "#202B32",
       },
+      fontFamily: {
+        sans: ['"Poppins"', "sans-serif"],
+        mono: ['"Roboto Mono"', "monospace"],
+      },
     },
   },
   plugins: [],
