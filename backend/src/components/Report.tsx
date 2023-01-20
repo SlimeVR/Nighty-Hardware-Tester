@@ -17,7 +17,7 @@ const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
       <Disclosure>
         {({ open }) => (
           <>
-            <Disclosure.Button className="flex w-full justify-between p-2">
+            <Disclosure.Button className="flex w-full justify-between p-2 outline-none">
               <div className="w-fit self-start">{value.step}</div>
 
               <div className="w-fit self-center">
@@ -65,7 +65,7 @@ export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
       <Disclosure>
         {({ open }) => (
           <>
-            <Disclosure.Button className="flex w-full gap-4 p-2 text-left">
+            <Disclosure.Button className="flex w-full gap-4 p-2 text-left outline-none">
               <div className="flex-1">
                 <Chip text={report.id} monospace />
               </div>
