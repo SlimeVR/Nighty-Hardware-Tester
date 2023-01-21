@@ -1,5 +1,5 @@
-import "@fontsource/poppins/400.css";
 import "@fontsource/roboto-mono/400.css";
+import "@fontsource/roboto/400.css";
 import type { AppType } from "next/app";
 import "../styles/globals.css";
 import { trpc } from "../utils/trpc";

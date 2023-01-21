@@ -10,7 +10,7 @@
     "start": "yarn prisma migrate deploy && yarn next start"
   },
   "dependencies": {
-    "@fontsource/poppins": "^4.5.10",
+    "@fontsource/roboto": "^4.5.8",
     "@fontsource/roboto-mono": "^4.5.10",
     "@headlessui/react": "^1.7.7",
     "@prisma/client": "^4.7.1",

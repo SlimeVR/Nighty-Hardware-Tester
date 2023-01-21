@@ -9,7 +9,7 @@ module.exports = {
         field: "#202B32",
       },
       fontFamily: {
-        sans: ['"Poppins"', "sans-serif"],
+        sans: ['"Roboto"', "sans-serif"],
         mono: ['"Roboto Mono"', "monospace"],
       },
     },
