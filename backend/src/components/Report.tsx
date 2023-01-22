@@ -66,8 +66,14 @@ export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
         {({ open }) => (
           <>
             <Disclosure.Button className="flex w-full gap-4 p-2 text-left outline-none">
-              <div className="flex-1">
-                <Chip text={report.id} monospace />
+              <div className="flex flex-1 gap-1">
+                <div className="w-fit">
+                  <Chip text={report.type} color="green" />
+                </div>
+
+                <div className="w-fit">
+                  <Chip text={report.id} monospace />
+                </div>
               </div>
 
               <div className="w-fit self-center">
