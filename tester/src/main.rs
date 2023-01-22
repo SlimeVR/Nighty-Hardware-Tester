@@ -97,7 +97,7 @@ fn main() {
         loop {
             {
                 let mut l = logger.lock().unwrap();
-                l.action("[ Please disconnect the device ]");
+                l.action("[ Please connect the device ]");
             }
 
             executor.wait_for_device_connect();

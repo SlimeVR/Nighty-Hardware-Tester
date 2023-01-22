@@ -38,7 +38,10 @@ pub fn read_line(serial: &mut Serial) -> Result<String, String> {
     let mut buf = String::new();
 
     loop {
-        let str = read_string(serial)?;
+        let str = match read_string(serial) {
+            Ok(str) => str,
+            Err(e) => return Err("Buffer: ".to_string() + &buf + "\nError: " + &e),
+        };
 
         buf.push_str(&str);
 
@@ -61,7 +64,11 @@ pub fn read_string_until(
     println!("==================================");
 
     loop {
-        let line = read_line(serial)?;
+        let line = match read_line(serial) {
+            Ok(line) => line,
+            Err(e) => return Err("Lines: ".to_string() + &lines.join("\n") + "\nError: " + &e),
+        };
+
         lines.push(line.clone());
 
         for p in &positive {
