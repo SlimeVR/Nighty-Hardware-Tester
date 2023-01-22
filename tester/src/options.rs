@@ -1,16 +1,19 @@
 use std::env;
 
+#[derive(Clone)]
 pub enum FlashWith {
     PlatformIO,
     ESPTool,
 }
 
+#[derive(Clone)]
 pub struct Options {
     pub no_build: bool,
     pub flash_with: FlashWith,
     pub flash_baudrate: u32,
     pub rpc_url: String,
     pub rpc_password: String,
+    pub report_type: String,
 }
 
 impl Options {
@@ -33,12 +36,15 @@ impl Options {
             env::var("TESTER_RPC_URL").unwrap_or("https://localhost:3000/api/rpc".to_string());
         let rpc_password = env::var("TESTER_RPC_PASSWORD").unwrap_or("password".to_string());
 
+        let report_type = env::var("TESTER_REPORT_TYPE").unwrap_or("json".to_string());
+
         Self {
             no_build,
             flash_with,
             flash_baudrate,
             rpc_url,
             rpc_password,
+            report_type,
         }
     }
 }
