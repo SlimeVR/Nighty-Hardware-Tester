@@ -54,7 +54,7 @@ pub fn read_mac_address(esp: &mut esp::ESP) -> gpio::Result<ReadMacAddressResult
     })
 }
 
-pub fn write_flash(file: &str, esp: &mut esp::ESP) -> gpio::Result<String> {
+pub fn write_flash(file: &str, esp: &mut esp::ESP, baudrate: u32) -> gpio::Result<String> {
     esp.reset_for_upload()?;
 
     let c = process::Command::new("/usr/bin/python3")
@@ -68,7 +68,7 @@ pub fn write_flash(file: &str, esp: &mut esp::ESP) -> gpio::Result<String> {
         .arg("--port")
         .arg("/dev/ttyUSB0")
         .arg("--baud")
-        .arg("921600")
+        .arg(baudrate.to_string())
         .arg("write_flash")
         .arg("-fm")
         .arg("qio")

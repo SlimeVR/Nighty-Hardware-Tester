@@ -322,6 +322,7 @@ fn main() {
                     options::FlashWith::ESPTool => esptool::write_flash(
                         "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
                         &mut esp,
+                        options.flash_baudrate,
                     ),
                     options::FlashWith::PlatformIO => pio::flash("esp12e", &mut esp),
                 };
