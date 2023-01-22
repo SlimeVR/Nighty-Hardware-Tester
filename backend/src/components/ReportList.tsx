@@ -6,12 +6,18 @@ export const ReportList: FC<{
   id: string | null;
   onlyFailedReports: boolean;
 }> = ({ id, onlyFailedReports }) => {
-  const { data: reports, error } = trpc.reports.useQuery({
-    limit: 100,
-    offset: 0,
-    onlyFailedReports,
-    id,
-  });
+  const { data: reports, error } = trpc.reports.useQuery(
+    {
+      limit: 100,
+      offset: 0,
+      onlyFailedReports,
+      id,
+    },
+    {
+      keepPreviousData: true,
+      refetchInterval: 20 * 1000,
+    }
+  );
 
   if (error) {
     return <div>error</div>;
