@@ -18,6 +18,7 @@ pub struct TestReport<'a> {
     #[serde(rename = "type")]
     pub _type: &'a str,
     pub values: Vec<TestReportValue>,
+    pub tester: &'a str,
     #[serde(rename = "startedAt")]
     pub started_at: chrono::DateTime<chrono::Utc>,
     #[serde(rename = "endedAt")]

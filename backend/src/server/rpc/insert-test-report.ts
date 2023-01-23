@@ -24,6 +24,7 @@ export const handleInsertTestReportRPC = async (
         type: params.type,
         startedAt: new Date(params.startedAt),
         endedAt: new Date(params.endedAt),
+        tester: params.tester,
         values: {
           createMany: {
             data: params.values.map(

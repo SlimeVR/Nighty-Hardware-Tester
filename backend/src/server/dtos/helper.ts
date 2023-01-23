@@ -2,9 +2,9 @@ import { TestReport, TestReportValue } from "@prisma/client";
 import { z } from "zod";
 
 export const TestReportValueValidator = z.object({
-  step: z.string(),
-  condition: z.string(),
-  value: z.string(),
+  step: z.string().trim().min(1),
+  condition: z.string().trim().min(1),
+  value: z.string().trim().min(1),
   failed: z.boolean(),
   logs: z.string().nullable(),
   startedAt: z.string().datetime(),
@@ -27,8 +27,9 @@ export const TestReportValueToDto = (
 });
 
 export const TestReportValidator = z.object({
-  id: z.string(),
-  type: z.string(),
+  id: z.string().trim().min(1),
+  type: z.string().trim().min(1),
+  tester: z.string().trim().min(1),
   values: z.array(TestReportValueValidator),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
@@ -46,6 +47,7 @@ export const TestReportToDto = (
   uuid: report.uuid,
   id: report.id,
   type: report.type,
+  tester: report.tester,
   values: report.values.map(TestReportValueToDto),
   startedAt: report.startedAt.toISOString(),
   endedAt: report.endedAt.toISOString(),

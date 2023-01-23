@@ -179,6 +179,7 @@ fn main() {
                 match client.send_test_report(
                     &options.report_type,
                     board.id.clone().unwrap(),
+                    &options.tester_name,
                     &board.values,
                     board.started_at,
                     board.ended_at,

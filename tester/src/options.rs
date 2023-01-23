@@ -14,6 +14,7 @@ pub struct Options {
     pub rpc_url: String,
     pub rpc_password: String,
     pub report_type: String,
+    pub tester_name: String,
 }
 
 impl Options {
@@ -38,6 +39,9 @@ impl Options {
 
         let report_type = env::var("TESTER_REPORT_TYPE").unwrap_or("json".to_string());
 
+        let tester_name =
+            env::var("TESTER_NAME").unwrap_or(gethostname::gethostname().into_string().unwrap());
+
         Self {
             no_build,
             flash_with,
@@ -45,6 +49,7 @@ impl Options {
             rpc_url,
             rpc_password,
             report_type,
+            tester_name,
         }
     }
 }

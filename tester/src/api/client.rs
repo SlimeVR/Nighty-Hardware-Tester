@@ -30,6 +30,7 @@ impl Client {
         &self,
         _type: &str,
         id: impl AsRef<str>,
+        tester: impl AsRef<str>,
         values: &[TestReportValue],
         started_at: chrono::DateTime<chrono::Utc>,
         ended_at: chrono::DateTime<chrono::Utc>,
@@ -39,6 +40,7 @@ impl Client {
             params: ApiRequestBodyInsertTestReport(TestReport {
                 id: id.as_ref(),
                 _type,
+                tester: tester.as_ref(),
                 values: values.to_vec(),
                 started_at,
                 ended_at,
