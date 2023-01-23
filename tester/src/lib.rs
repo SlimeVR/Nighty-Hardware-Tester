@@ -9,6 +9,19 @@ pub use helpers::*;
 pub struct Board {
     pub id: Option<String>,
     pub values: Vec<api::TestReportValue>,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub ended_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl Board {
+    pub fn new() -> Board {
+        Board {
+            id: None,
+            values: Vec::new(),
+            started_at: chrono::Utc::now(),
+            ended_at: chrono::DateTime::<chrono::Utc>::MIN_UTC,
+        }
+    }
 }
 
 pub enum TestResult {

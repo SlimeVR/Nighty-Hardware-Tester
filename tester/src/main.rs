@@ -180,6 +180,8 @@ fn main() {
                     &options.report_type,
                     board.id.clone().unwrap(),
                     &board.values,
+                    board.started_at,
+                    board.ended_at,
                 ) {
                     Ok(s) => {
                         if s.status() != reqwest::StatusCode::OK {

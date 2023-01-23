@@ -31,6 +31,8 @@ impl Client {
         _type: &str,
         id: impl AsRef<str>,
         values: &[TestReportValue],
+        started_at: chrono::DateTime<chrono::Utc>,
+        ended_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<blocking::Response, reqwest::Error> {
         let body = ApiRequestBody {
             method: "insert_test_report",
@@ -38,6 +40,8 @@ impl Client {
                 id: id.as_ref(),
                 _type,
                 values: values.to_vec(),
+                started_at,
+                ended_at,
             }),
         };
 

@@ -2,10 +2,10 @@ import { Disclosure } from "@headlessui/react";
 import clsx from "clsx";
 import { FC } from "react";
 import { HiChevronDown, HiChevronUp } from "react-icons/hi2";
-import { TestReportDto, TestReportValueDto } from "../server/dtos/helper";
+import { TestReport, TestReportValue } from "../hooks/useReports";
 import { Chip } from "./Chip";
 
-const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
+const ValueComponent: FC<{ value: TestReportValue }> = ({ value }) => {
   return (
     <div
       className={clsx(
@@ -17,8 +17,14 @@ const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
       <Disclosure>
         {({ open }) => (
           <>
-            <Disclosure.Button className="flex w-full justify-between p-2 outline-none">
-              <div className="w-fit self-start">{value.step}</div>
+            <Disclosure.Button className="flex w-full justify-between gap-1 p-2 outline-none">
+              <div className="flex-1">
+                <div className="w-fit self-start">{value.step}</div>
+              </div>
+
+              <div className="w-fit">
+                {(value.endedAt.getTime() - value.startedAt.getTime()) / 1000}s
+              </div>
 
               <div className="w-fit self-center">
                 {open ? (
@@ -51,7 +57,7 @@ const ValueComponent: FC<{ value: TestReportValueDto }> = ({ value }) => {
   );
 };
 
-export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
+export const ReportComponent: FC<{ report: TestReport }> = ({ report }) => {
   return (
     <div
       className={clsx(
@@ -77,7 +83,12 @@ export const ReportComponent: FC<{ report: TestReportDto }> = ({ report }) => {
               </div>
 
               <div className="w-fit self-center">
-                {new Date(report.testedAt).toLocaleString()}
+                {(report.endedAt.getTime() - report.startedAt.getTime()) / 1000}
+                s
+              </div>
+
+              <div className="w-fit self-center">
+                {report.endedAt.toLocaleString()}
               </div>
 
               <div className="w-fit self-center">

@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 ads1x1x = "0.2.2"
-chrono = "0.4.22"
+chrono = { version = "0.4.22", features = ["serde"] }
 colored = "2.0.0"
 crossterm = "0.25.0"
 embedded-hal = "0.2.7"

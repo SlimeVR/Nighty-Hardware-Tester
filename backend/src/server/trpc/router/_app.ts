@@ -22,7 +22,7 @@ export const appRouter = router({
             values: true,
           },
           orderBy: {
-            testedAt: "desc",
+            endedAt: "desc",
           },
           where: {
             id: input.id === null ? undefined : { search: input.id },

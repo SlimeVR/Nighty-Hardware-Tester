@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearch"]
 }
 
@@ -15,7 +15,8 @@ model TestReport {
   type   String
   values TestReportValue[]
 
-  testedAt DateTime @default(now())
+  startedAt DateTime @default(now())
+  endedAt   DateTime @default(now()) @map("testedAt")
 
   @@index([type, id])
 }
@@ -32,4 +33,9 @@ model TestReportValue {
 
   testReport   TestReport? @relation(fields: [testReportId], references: [uuid])
   testReportId String?     @db.Uuid
+
+  startedAt DateTime @default(now())
+  endedAt   DateTime @default(now())
+
+  @@index([testReportId])
 }

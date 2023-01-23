@@ -7,6 +7,8 @@ export const TestReportValueValidator = z.object({
   value: z.string(),
   failed: z.boolean(),
   logs: z.string().nullable(),
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime(),
 });
 export type TestReportValueDto = z.infer<typeof TestReportValueValidator> & {
   id: string;
@@ -20,12 +22,16 @@ export const TestReportValueToDto = (
   value: value.value,
   failed: value.failed,
   logs: value.logs,
+  startedAt: value.startedAt.toISOString(),
+  endedAt: value.endedAt.toISOString(),
 });
 
 export const TestReportValidator = z.object({
   id: z.string(),
   type: z.string(),
   values: z.array(TestReportValueValidator),
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime(),
 });
 export type TestReportDto = Omit<
   z.infer<typeof TestReportValidator>,
@@ -33,7 +39,6 @@ export type TestReportDto = Omit<
 > & {
   uuid: string;
   values: TestReportValueDto[];
-  testedAt: string;
 };
 export const TestReportToDto = (
   report: TestReport & { values: TestReportValue[] }
@@ -42,5 +47,6 @@ export const TestReportToDto = (
   id: report.id,
   type: report.type,
   values: report.values.map(TestReportValueToDto),
-  testedAt: report.testedAt.toISOString(),
+  startedAt: report.startedAt.toISOString(),
+  endedAt: report.endedAt.toISOString(),
 });

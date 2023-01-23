@@ -10,18 +10,20 @@ export const InsertTestReportValidator = z.object({
   params: TestReportValidator,
 });
 
-type InsertTestReport = z.infer<typeof InsertTestReportValidator>;
-
 export const handleInsertTestReportRPC = async (
   req: NextApiRequest,
   res: NextApiResponse,
-  params: InsertTestReport["params"]
+  raw: unknown
 ): Promise<Result<{ id: string }, string>> => {
   try {
+    const params = TestReportValidator.parse(raw);
+
     const { id } = await prisma.testReport.create({
       data: {
         id: params.id,
         type: params.type,
+        startedAt: new Date(params.startedAt),
+        endedAt: new Date(params.endedAt),
         values: {
           createMany: {
             data: params.values.map(
@@ -31,6 +33,8 @@ export const handleInsertTestReportRPC = async (
                 condition: value.condition,
                 value: value.value,
                 logs: value.logs,
+                startedAt: new Date(value.startedAt),
+                endedAt: new Date(value.endedAt),
               })
             ),
           },

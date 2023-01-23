@@ -54,12 +54,11 @@ impl TestExecutor for MainboardTestExecutor {
     fn run(&mut self) -> TestResult {
         thread::sleep(time::Duration::from_millis(250));
 
-        let mut board = Board {
-            id: None,
-            values: Vec::new(),
-        };
+        let mut board = Board::new();
 
         let err = {
+            let start = chrono::Utc::now();
+
             match self.adc.measure(ChannelSelection::SingleA2) {
                 Ok(v) => {
                     board.values.push(api::TestReportValue::new(
@@ -68,6 +67,8 @@ impl TestExecutor for MainboardTestExecutor {
                         v.to_string() + "V",
                         None::<&str>,
                         false,
+                        start,
+                        chrono::Utc::now(),
                     ));
                 }
                 Err(e) => match e {
@@ -78,6 +79,8 @@ impl TestExecutor for MainboardTestExecutor {
                             "N/A",
                             Some("err: would block"),
                             false,
+                            start,
+                            chrono::Utc::now(),
                         ));
                     }
                     nb::Error::Other(e) => match e {
@@ -88,6 +91,8 @@ impl TestExecutor for MainboardTestExecutor {
                                 "N/A",
                                 Some(&format!("err: i2c: {}", e)),
                                 false,
+                                start,
+                                chrono::Utc::now(),
                             ));
                         }
                         ads1x1x::Error::InvalidInputData => {
@@ -97,6 +102,8 @@ impl TestExecutor for MainboardTestExecutor {
                                 "N/A",
                                 Some("err: invalid input data"),
                                 false,
+                                start,
+                                chrono::Utc::now(),
                             ));
                         }
                     },
@@ -107,6 +114,8 @@ impl TestExecutor for MainboardTestExecutor {
                 let mut l = self.logger.lock().unwrap();
                 l.in_progress("Measuring B+...");
             }
+
+            let start = chrono::Utc::now();
             let bplus_err = match self.adc.measure(ChannelSelection::SingleA3) {
                 Ok(v) => {
                     let bplus_err = v < 4.0;
@@ -125,6 +134,8 @@ impl TestExecutor for MainboardTestExecutor {
                         v.to_string() + "V",
                         None::<&str>,
                         bplus_err,
+                        start,
+                        chrono::Utc::now(),
                     ));
 
                     bplus_err
@@ -137,6 +148,8 @@ impl TestExecutor for MainboardTestExecutor {
                             "N/A",
                             Some("err: would block"),
                             true,
+                            start,
+                            chrono::Utc::now(),
                         ));
 
                         true
@@ -149,6 +162,8 @@ impl TestExecutor for MainboardTestExecutor {
                                 "N/A",
                                 Some(&format!("err: i2c: {}", e)),
                                 true,
+                                start,
+                                chrono::Utc::now(),
                             ));
 
                             true
@@ -160,6 +175,8 @@ impl TestExecutor for MainboardTestExecutor {
                                 "N/A",
                                 Some("err: invalid input data"),
                                 true,
+                                start,
+                                chrono::Utc::now(),
                             ));
 
                             true
@@ -172,6 +189,8 @@ impl TestExecutor for MainboardTestExecutor {
                 let mut l = self.logger.lock().unwrap();
                 l.in_progress("Measuring 3V3...");
             }
+
+            let start = chrono::Utc::now();
             let r3v3_err = match self.adc.measure(ChannelSelection::SingleA0) {
                 Ok(v) => {
                     let r3v3_err = v < 2.8 || v > 3.2;
@@ -190,6 +209,8 @@ impl TestExecutor for MainboardTestExecutor {
                         v.to_string() + "V",
                         None::<&str>,
                         r3v3_err,
+                        start,
+                        chrono::Utc::now(),
                     ));
 
                     r3v3_err
@@ -202,6 +223,8 @@ impl TestExecutor for MainboardTestExecutor {
                             "N/A",
                             Some("err: would block"),
                             true,
+                            start,
+                            chrono::Utc::now(),
                         ));
 
                         true
@@ -214,6 +237,8 @@ impl TestExecutor for MainboardTestExecutor {
                                 "N/A",
                                 Some(&format!("err: i2c: {}", e)),
                                 true,
+                                start,
+                                chrono::Utc::now(),
                             ));
 
                             true
@@ -225,6 +250,8 @@ impl TestExecutor for MainboardTestExecutor {
                                 "N/A",
                                 Some("err: invalid input data"),
                                 true,
+                                start,
+                                chrono::Utc::now(),
                             ));
 
                             true
@@ -242,6 +269,7 @@ impl TestExecutor for MainboardTestExecutor {
                 l.error("-> Faulty power circuit");
             }
 
+            board.ended_at = chrono::Utc::now();
             return TestResult::Failed(board);
         }
 
@@ -251,6 +279,7 @@ impl TestExecutor for MainboardTestExecutor {
                 l.in_progress("Reading MAC address...");
             }
 
+            let start = chrono::Utc::now();
             match esptool::read_mac_address(&mut self.esp) {
                 Ok(esptool::ReadMacAddressResult { mac, log }) => {
                     board.id = Some(mac.clone());
@@ -260,6 +289,8 @@ impl TestExecutor for MainboardTestExecutor {
                         mac.clone(),
                         Some(log),
                         false,
+                        start,
+                        chrono::Utc::now(),
                     ));
 
                     {
@@ -274,6 +305,8 @@ impl TestExecutor for MainboardTestExecutor {
                         "N/A",
                         Some(e.to_string()),
                         true,
+                        start,
+                        chrono::Utc::now(),
                     ));
 
                     {
@@ -282,6 +315,7 @@ impl TestExecutor for MainboardTestExecutor {
                         l.error("-> ESP8266 faulty");
                     }
 
+                    board.ended_at = chrono::Utc::now();
                     return TestResult::Failed(board);
                 }
             }
@@ -293,6 +327,7 @@ impl TestExecutor for MainboardTestExecutor {
                 l.in_progress("Flashing...");
             }
 
+            let start = chrono::Utc::now();
             let result = match self.options.flash_with {
                 options::FlashWith::ESPTool => esptool::write_flash(
                     "slimevr-tracker-esp/.pio/build/esp12e/firmware.bin",
@@ -301,6 +336,7 @@ impl TestExecutor for MainboardTestExecutor {
                 ),
                 options::FlashWith::PlatformIO => pio::flash("esp12e", &mut self.esp),
             };
+            let end = chrono::Utc::now();
 
             match result {
                 Ok(logs) => {
@@ -310,6 +346,8 @@ impl TestExecutor for MainboardTestExecutor {
                         true,
                         Some(logs),
                         false,
+                        start,
+                        end,
                     ));
 
                     {
@@ -324,6 +362,8 @@ impl TestExecutor for MainboardTestExecutor {
                         false,
                         Some(e.to_string()),
                         true,
+                        start,
+                        end,
                     ));
 
                     {
@@ -332,6 +372,7 @@ impl TestExecutor for MainboardTestExecutor {
                         l.error("-> Flashing failed");
                     }
 
+                    board.ended_at = chrono::Utc::now();
                     return TestResult::Failed(board);
                 }
             }
@@ -343,10 +384,12 @@ impl TestExecutor for MainboardTestExecutor {
                 l.in_progress("Connecting to serial port...");
             }
 
+            let start = chrono::Utc::now();
             let serial = serialport::new("/dev/ttyUSB0", 115200)
                 .timeout(time::Duration::from_millis(10000))
                 .data_bits(serialport::DataBits::Eight)
                 .open();
+            let end = chrono::Utc::now();
 
             let mut serial = match serial {
                 Ok(serial) => {
@@ -361,6 +404,8 @@ impl TestExecutor for MainboardTestExecutor {
                         true,
                         None::<&str>,
                         false,
+                        start,
+                        end,
                     ));
 
                     serial
@@ -378,8 +423,11 @@ impl TestExecutor for MainboardTestExecutor {
                         false,
                         Some(error),
                         true,
+                        start,
+                        end,
                     ));
 
+                    board.ended_at = chrono::Utc::now();
                     return TestResult::Failed(board);
                 }
             };
@@ -397,6 +445,7 @@ impl TestExecutor for MainboardTestExecutor {
 
                 self.esp.reset_no_delay().unwrap();
 
+                let start = chrono::Utc::now();
                 match serial::read_string_until(
                     &mut serial,
                     vec!["[INFO ] [BNO080Sensor:0] Connected to"],
@@ -414,6 +463,8 @@ impl TestExecutor for MainboardTestExecutor {
                             true,
                             Some(logs),
                             false,
+                            start,
+                            chrono::Utc::now(),
                         ));
                     }
                     Err(logs) => {
@@ -429,8 +480,11 @@ impl TestExecutor for MainboardTestExecutor {
                             false,
                             Some(logs),
                             true,
+                            start,
+                            chrono::Utc::now(),
                         ));
 
+                        board.ended_at = chrono::Utc::now();
                         return TestResult::Failed(board);
                     }
                 };
@@ -444,6 +498,7 @@ impl TestExecutor for MainboardTestExecutor {
                     l.in_progress("Checking IMU via `GET TEST` command...");
                 }
 
+                let start = chrono::Utc::now();
                 if let Err(e) = serial::write(&mut serial, b"GET TEST\n") {
                     {
                         let mut l = self.logger.lock().unwrap();
@@ -456,8 +511,11 @@ impl TestExecutor for MainboardTestExecutor {
                         false,
                         Some(format!("Failed to write to serial port: {}", e)),
                         true,
+                        start,
+                        chrono::Utc::now(),
                     ));
 
+                    board.ended_at = chrono::Utc::now();
                     return TestResult::Failed(board);
                 }
 
@@ -478,6 +536,8 @@ impl TestExecutor for MainboardTestExecutor {
                             true,
                             Some(logs),
                             false,
+                            start,
+                            chrono::Utc::now(),
                         ));
                     }
                     Err(logs) => {
@@ -493,14 +553,18 @@ impl TestExecutor for MainboardTestExecutor {
                             false,
                             Some(logs),
                             true,
+                            start,
+                            chrono::Utc::now(),
                         ));
 
+                        board.ended_at = chrono::Utc::now();
                         return TestResult::Failed(board);
                     }
                 };
             };
         }
 
+        board.ended_at = chrono::Utc::now();
         TestResult::Passed(board)
     }
 }
