@@ -448,7 +448,7 @@ impl TestExecutor for MainboardTestExecutor {
                 let start = chrono::Utc::now();
                 match serial::read_string_until(
                     &mut serial,
-                    vec!["[INFO ] [BNO080Sensor:0] Connected to"],
+                    vec!["[INFO ] [BNO080Sensor:0] Connected to BNO085 on 0x4a"],
                     vec!["ERR", "[FATAL"],
                 ) {
                     Ok(logs) => {
