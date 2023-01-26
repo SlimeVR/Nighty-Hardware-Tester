@@ -19,3 +19,4 @@ serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
 serialport = "4.2.0"
 uuid = { version = "1.2.2", features = ["v4"] }
+bno080 = "0.1.3"
