@@ -99,6 +99,8 @@ impl TestExecutor for AuxBoardTestExecutor {
 			}
 		}
 
+		thread::sleep(time::Duration::from_millis(500));
+
 		{
 			let mut l = self.logger.lock().unwrap();
 			l.in_progress("Enabling game rotation vector...");
@@ -158,7 +160,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		{
 			if self.int_pin.is_low()
 			{
-				processed_messages += self.bno.handle_one_message(&mut self.delay, u8::MAX);
+				processed_messages += self.bno.handle_one_message(&mut self.delay, 10);
 			}
 			thread::sleep(time::Duration::from_millis(1));
 		}
