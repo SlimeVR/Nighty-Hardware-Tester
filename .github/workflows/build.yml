@@ -17,6 +17,11 @@ jobs:
           override: true
           target: aarch64-unknown-linux-gnu
 
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "aarch64-unknown-linux-gnu"
+
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
