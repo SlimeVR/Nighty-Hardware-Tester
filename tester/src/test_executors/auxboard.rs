@@ -56,6 +56,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let mut board = Board::new();
 		board.id = Some(uuid::Uuid::new_v4().to_string());
 
+		/*
 		{
 			let mut l = self.logger.lock().unwrap();
 			l.in_progress("Initializing BNO080...");
@@ -100,6 +101,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		}
 
 		thread::sleep(time::Duration::from_millis(500));
+		*/
 
 		{
 			let mut l = self.logger.lock().unwrap();
@@ -152,8 +154,8 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let start = chrono::Utc::now();
 		let mut processed_messages = 0;
 		// Eat all and wait a bit
-		self.bno.eat_all_messages(&mut self.delay);
-		thread::sleep(time::Duration::from_millis(10));
+		//self.bno.eat_all_messages(&mut self.delay);
+		//thread::sleep(time::Duration::from_millis(10));
 
 		let now = time::Instant::now();
 		while now.elapsed().as_millis() < 500
@@ -161,6 +163,10 @@ impl TestExecutor for AuxBoardTestExecutor {
 			if self.int_pin.is_low()
 			{
 				processed_messages += self.bno.handle_one_message(&mut self.delay, 0);
+				{
+					let mut l = self.logger.lock().unwrap();
+					l.in_progress("New message. Channel {:?}", self.bno.last_chan_received);
+				}
 			}
 			thread::sleep(time::Duration::from_millis(1));
 		}
