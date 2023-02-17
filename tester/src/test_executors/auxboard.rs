@@ -204,27 +204,25 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let start = chrono::Utc::now();
 		match self.bno.rotation_quaternion() {
 			Ok(q) => {
-				match q { // Check if quaternion is all 0 which means it was never read
-					[0.0, 0.0, 0.0, 0.0] => {
-						board.add_value(api::TestReportValue::new(
-							"Quaternion",
-							"should be valid",
-							"false",
-							Some(format!("{:?}", q)),
-							true,
-							start,
-							chrono::Utc::now(),
-						));
-						board.ended_at = chrono::Utc::now();
-		
-						{
-							let mut l = self.logger.lock().unwrap();
-							l.error(&format!("Quaternion is empty"));
-						}
-		
-						return crate::TestResult::Failed(board);
+				if q == [0.0, 0.0, 0.0, 0.0]
+				{
+					board.add_value(api::TestReportValue::new(
+						"Quaternion",
+						"should be valid",
+						"false",
+						Some(format!("{:?}", q)),
+						true,
+						start,
+						chrono::Utc::now(),
+					));
+					board.ended_at = chrono::Utc::now();
+	
+					{
+						let mut l = self.logger.lock().unwrap();
+						l.error(&format!("Quaternion is empty"));
 					}
-					_ => {}
+	
+					return crate::TestResult::Failed(board);
 				}
 				board.add_value(api::TestReportValue::new(
 					"Quaternion",
