@@ -32,9 +32,9 @@ impl AuxBoardTestExecutor {
 		let bno = wrapper::BNO080::new_with_interface(si);
 
 		let delay = rppal::hal::Delay::new();
-		let int = gpio.get(17).unwrap().into_input_pullup();
+		let int_pin = gpio.get(17).unwrap().into_input_pullup();
 
-		AuxBoardTestExecutor { bno, delay, logger, int}
+		AuxBoardTestExecutor { bno, delay, logger, int_pin}
 	}
 }
 
@@ -156,7 +156,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let now = time::Instant::now();
 		while now.elapsed().as_millis() < 500
 		{
-			if int_pin.is_low()
+			if self.int_pin.is_low()
 			{
 				processed_messages += self.bno.handle_one_message(&mut self.delay, u8::MAX);
 			}
