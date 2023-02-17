@@ -18,6 +18,7 @@ pub struct AuxBoardTestExecutor {
 	bno: BNOInterface,
 	delay: rppal::hal::Delay,
 	logger: sync::Arc<sync::Mutex<logger::Logger>>,
+	gpio: Gpio,
 }
 
 impl AuxBoardTestExecutor {
@@ -32,7 +33,7 @@ impl AuxBoardTestExecutor {
 
 		let delay = rppal::hal::Delay::new();
 
-		AuxBoardTestExecutor { bno, delay, logger }
+		AuxBoardTestExecutor { bno, delay, logger, gpio }
 	}
 }
 
@@ -146,13 +147,14 @@ impl TestExecutor for AuxBoardTestExecutor {
 		}
 
 		let start = chrono::Utc::now();
-		let int_pin = gpio.get(17).into_input();
+		let int_pin = self.gpio.get(17).into_input();
 		let processed_messages = 0;
 		// Eat all and wait a bit
 		self.bno.eat_all_messages(&mut self.delay);
 		thread::sleep(time::Duration::from_millis(10));
-
-		while start.elasped().as_millis() < 500
+		
+		let now = time::Instant::now();
+		while now.elapsed().as_millis() < 500
 		{
 			if int_pin.is_low()
 			{
