@@ -4,7 +4,7 @@ use std::time;
 
 use bno080::{interface::i2c, wrapper};
 use rppal::i2c as rp_i2c;
-use rppal::gpio::Gpio;
+use rppal::gpio;
 
 use crate::api;
 use crate::logger;
@@ -18,13 +18,13 @@ pub struct AuxBoardTestExecutor {
 	bno: BNOInterface,
 	delay: rppal::hal::Delay,
 	logger: sync::Arc<sync::Mutex<logger::Logger>>,
-	gpio: Gpio,
+	int_pin: gpio::InputPin,
 }
 
 impl AuxBoardTestExecutor {
 	pub fn new(
 		i2c: rp_i2c::I2c,
-		gpio: Gpio,
+		gpio: gpio::Gpio,
 		logger: sync::Arc<sync::Mutex<logger::Logger>>,
 	) -> AuxBoardTestExecutor {
 		// TODO: switch out when testing extensions
@@ -32,8 +32,9 @@ impl AuxBoardTestExecutor {
 		let bno = wrapper::BNO080::new_with_interface(si);
 
 		let delay = rppal::hal::Delay::new();
+		let int = gpio.get(17).unwrap().into_input_pullup();
 
-		AuxBoardTestExecutor { bno, delay, logger, gpio }
+		AuxBoardTestExecutor { bno, delay, logger, int}
 	}
 }
 
@@ -147,12 +148,11 @@ impl TestExecutor for AuxBoardTestExecutor {
 		}
 
 		let start = chrono::Utc::now();
-		let int_pin = self.gpio.get(17).into_input();
 		let processed_messages = 0;
 		// Eat all and wait a bit
 		self.bno.eat_all_messages(&mut self.delay);
 		thread::sleep(time::Duration::from_millis(10));
-		
+
 		let now = time::Instant::now();
 		while now.elapsed().as_millis() < 500
 		{
