@@ -152,14 +152,16 @@ impl TestExecutor for AuxBoardTestExecutor {
 		self.bno.eat_all_messages(&mut self.delay);
 		thread::sleep(time::Duration::from_millis(10));
 
-		while(start.elapsed().as_millis() < 500)
+		while start.elasped().as_millis() < 500
 		{
-			if(int_pin.is_low())
+			if int_pin.is_low()
+			{
 				processed_messages += self.bno.handle_one_message(&mut self.delay, u8::MAX);
+			}
 			thread::sleep(time::Duration::from_millis(1));
 		}
 		
-		if(processed_messages > 0)
+		if processed_messages > 0
 		{
 			board.add_value(api::TestReportValue::new(
 				"Handling messages",
@@ -208,7 +210,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 							"Quaternion",
 							"should be valid",
 							"false",
-							Some(format!("{:?}", e)),
+							Some(format!("{:?}", q)),
 							true,
 							start,
 							chrono::Utc::now(),
@@ -217,11 +219,12 @@ impl TestExecutor for AuxBoardTestExecutor {
 		
 						{
 							let mut l = self.logger.lock().unwrap();
-							l.error(&format!("Quaternion is empty", e));
+							l.error(&format!("Quaternion is empty"));
 						}
 		
 						return crate::TestResult::Failed(board);
 					}
+					_ => {}
 				}
 				board.add_value(api::TestReportValue::new(
 					"Quaternion",
