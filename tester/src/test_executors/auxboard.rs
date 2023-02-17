@@ -163,10 +163,6 @@ impl TestExecutor for AuxBoardTestExecutor {
 			if self.int_pin.is_low()
 			{
 				processed_messages += self.bno.handle_one_message(&mut self.delay, 0);
-				{
-					let mut l = self.logger.lock().unwrap();
-					l.in_progress(&format!("New message. Channel {}", self.bno.last_chan_received));
-				}
 			}
 			thread::sleep(time::Duration::from_millis(1));
 		}
