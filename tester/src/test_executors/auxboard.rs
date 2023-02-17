@@ -4,6 +4,7 @@ use std::time;
 
 use bno080::{interface::i2c, wrapper};
 use rppal::i2c as rp_i2c;
+use rppal::gpio::Gpio;
 
 use crate::api;
 use crate::logger;
@@ -22,6 +23,7 @@ pub struct AuxBoardTestExecutor {
 impl AuxBoardTestExecutor {
 	pub fn new(
 		i2c: rp_i2c::I2c,
+		gpio: Gpio,
 		logger: sync::Arc<sync::Mutex<logger::Logger>>,
 	) -> AuxBoardTestExecutor {
 		// TODO: switch out when testing extensions
@@ -97,13 +99,13 @@ impl TestExecutor for AuxBoardTestExecutor {
 
 		{
 			let mut l = self.logger.lock().unwrap();
-			l.in_progress("Enabling rotation vector...");
+			l.in_progress("Enabling game rotation vector...");
 		}
 		let start = chrono::Utc::now();
-		match self.bno.enable_rotation_vector(5) {
+		match self.bno.enable_rotation_vector(10) { // TODO enable game rotation vector
 			Ok(_) => {
 				board.add_value(api::TestReportValue::new(
-					"Rotation vector",
+					"Game rotation vector",
 					"should be enableable",
 					"true",
 					None::<String>,
@@ -114,12 +116,12 @@ impl TestExecutor for AuxBoardTestExecutor {
 
 				{
 					let mut l = self.logger.lock().unwrap();
-					l.success("Rotation vector enabled successfully");
+					l.success("Game rotation vector enabled successfully");
 				}
 			}
 			Err(e) => {
 				board.add_value(api::TestReportValue::new(
-					"Rotation vector",
+					"Game rotation vector",
 					"should be enabled",
 					"false",
 					Some(format!("{:?}", e)),
@@ -131,7 +133,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 
 				{
 					let mut l = self.logger.lock().unwrap();
-					l.error(&format!("Rotation vector failed to enable: {:?}", e));
+					l.error(&format!("Game rotation vector failed to enable: {:?}", e));
 				}
 
 				return crate::TestResult::Failed(board);
@@ -142,19 +144,53 @@ impl TestExecutor for AuxBoardTestExecutor {
 			let mut l = self.logger.lock().unwrap();
 			l.in_progress("Handling messages...");
 		}
-		let start = chrono::Utc::now();
-		thread::sleep(time::Duration::from_millis(500));
 
-		let processed_messages = self.bno.handle_all_messages(&mut self.delay, u8::MAX);
-		board.add_value(api::TestReportValue::new(
-			"Handling messages",
-			"should process messages",
-			processed_messages,
-			None::<String>,
-			false,
-			start,
-			chrono::Utc::now(),
-		));
+		let start = chrono::Utc::now();
+		let int_pin = gpio.get(17).into_input();
+		let processed_messages = 0;
+		// Eat all and wait a bit
+		self.bno.eat_all_messages(&mut self.delay);
+		thread::sleep(time::Duration::from_millis(10));
+
+		while(start + 500 > chrono::Utc::now())
+		{
+			if(int_pin.is_low())
+				processed_messages += self.bno.handle_one_message(&mut self.delay, u8::MAX);
+			thread::sleep(time::Duration::from_millis(1));
+		}
+		
+		if(processed_messages > 0)
+		{
+			board.add_value(api::TestReportValue::new(
+				"Handling messages",
+				"should process messages",
+				processed_messages,
+				None::<String>,
+				false,
+				start,
+				chrono::Utc::now(),
+			));
+		}
+		else
+		{
+			board.add_value(api::TestReportValue::new(
+				"Handling messages",
+				"should process messages",
+				"false",
+				None::<String>,
+				true,
+				start,
+				chrono::Utc::now(),
+			));
+			board.ended_at = chrono::Utc::now();
+
+			{
+				let mut l = self.logger.lock().unwrap();
+				l.error(&format!("Failed to read any messages"));
+			}
+
+			return crate::TestResult::Failed(board);
+		}
 
 		{
 			let mut l = self.logger.lock().unwrap();
@@ -166,6 +202,27 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let start = chrono::Utc::now();
 		match self.bno.rotation_quaternion() {
 			Ok(q) => {
+				match q { // Check if quaternion is all 0 which means it was never read
+					[0, 0, 0, 0] => {
+						board.add_value(api::TestReportValue::new(
+							"Quaternion",
+							"should be valid",
+							"false",
+							Some(format!("{:?}", e)),
+							true,
+							start,
+							chrono::Utc::now(),
+						));
+						board.ended_at = chrono::Utc::now();
+		
+						{
+							let mut l = self.logger.lock().unwrap();
+							l.error(&format!("Quaternion is empty", e));
+						}
+		
+						return crate::TestResult::Failed(board);
+					}
+				}
 				board.add_value(api::TestReportValue::new(
 					"Quaternion",
 					"should be valid",
