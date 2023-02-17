@@ -106,7 +106,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 			l.in_progress("Enabling game rotation vector...");
 		}
 		let start = chrono::Utc::now();
-		match self.bno.enable_rotation_vector(10) { // TODO enable game rotation vector
+		match self.bno.enable_rotation_vector(5) { // TODO enable game rotation vector
 			Ok(_) => {
 				board.add_value(api::TestReportValue::new(
 					"Game rotation vector",
@@ -160,7 +160,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		{
 			if self.int_pin.is_low()
 			{
-				processed_messages += self.bno.handle_one_message(&mut self.delay, 10);
+				processed_messages += self.bno.handle_one_message(&mut self.delay, 0);
 			}
 			thread::sleep(time::Duration::from_millis(1));
 		}
