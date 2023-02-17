@@ -152,7 +152,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		self.bno.eat_all_messages(&mut self.delay);
 		thread::sleep(time::Duration::from_millis(10));
 
-		while(start + 500 > chrono::Utc::now())
+		while(start.elapsed().as_millis() < 500)
 		{
 			if(int_pin.is_low())
 				processed_messages += self.bno.handle_one_message(&mut self.delay, u8::MAX);
@@ -203,7 +203,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		match self.bno.rotation_quaternion() {
 			Ok(q) => {
 				match q { // Check if quaternion is all 0 which means it was never read
-					[0, 0, 0, 0] => {
+					[0.0, 0.0, 0.0, 0.0] => {
 						board.add_value(api::TestReportValue::new(
 							"Quaternion",
 							"should be valid",
