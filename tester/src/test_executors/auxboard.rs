@@ -148,7 +148,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		}
 
 		let start = chrono::Utc::now();
-		let processed_messages = 0;
+		let mut processed_messages = 0;
 		// Eat all and wait a bit
 		self.bno.eat_all_messages(&mut self.delay);
 		thread::sleep(time::Duration::from_millis(10));
