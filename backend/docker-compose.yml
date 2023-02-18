@@ -10,3 +10,10 @@ services:
     restart: unless-stopped
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
+
+  pg-backup:
+    image: ghcr.io/thedevminertv/postgres-s3-backup:v1.0.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - EVERY=24h
