@@ -116,11 +116,14 @@ void loop()
             foundIMUAddr = I2CSCAN::findI2CAddr();
             if(foundIMUAddr > 0 && foundIMUAddr != BNO_EXT_ADDRESS)
             {
-                logger.fatal("Found I2C device on wrong address 0x%02x", foundIMUAddr);
-                logger.fatal("Test failed!");
-                printFail();
-                logger.info("Waiting until device disconnected");
-                state = IMU_WAITING_DISCONNECT;
+                if(foundIMUAddr == BNO_EXT_WRONG_ADDRESS) {
+                    logger.fatal("Found I2C device on wrong address 0x%02x", foundIMUAddr);
+                    logger.fatal("Test failed!");
+                    printFail();
+                    logger.info("Waiting until device disconnected");
+                    state = IMU_WAITING_DISCONNECT;
+                }
+                // For other IMUs just continue looking
             }
             break;
         case IMU_WAITING_RESPONSE:
