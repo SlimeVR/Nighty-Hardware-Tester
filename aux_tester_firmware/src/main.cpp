@@ -69,21 +69,21 @@ void setup()
 #define IMU_TIMEOUT 1000
 
 void printPass() {
-    Serial.print("  _____           _____  _____\n"
-                " |  __ \\  /\\     / ____|/ ____|\n"
-                " | |__) |/  \\   | (___ | (___\n"  
-                " |  ___// /\\ \\   \\___ \\ \\___ \\\n" 
-                " | |   / ____ \\  ____) |____) |\n"
-                " |_|  /_/    \\_\\|_____/|_____/\n");
+    Serial.print("\033[32;42m  _____           _____  _____                         \n"
+                " |  __ \\  /\\     / ____|/ ____|                      \n"
+                " | |__) |/  \\   | (___ | (___                         \n"  
+                " |  ___// /\\ \\   \\___ \\ \\___ \\                   \n" 
+                " | |   / ____ \\  ____) |____) |                       \n"
+                " |_|  /_/    \\_\\|_____/|_____/                       \033[0m\n");
 }
 
 void printFail() {
-    Serial.print("  ______        _____  _\n"      
-                " |  ____|/\\    |_   _|| |\n"     
-                " | |__  /  \\     | |  | |\n"     
-                " |  __|/ /\\ \\    | |  | |\n"     
-                " | |  / ____ \\  _| |_ | |____\n" 
-                " |_| /_/    \\_\\|_____||______|\n");
+    Serial.print("\033[31;41m  ______        _____  _                               \n"      
+                " |  ____|/\\    |_   _|| |                             \n"     
+                " | |__  /  \\     | |  | |                             \n"     
+                " |  __|/ /\\ \\    | |  | |                            \n"     
+                " | |  / ____ \\  _| |_ | |____                         \n" 
+                " |_| /_/    \\_\\|_____||______|                       \033[0m\n");
 }
 
 void loop()
@@ -123,7 +123,7 @@ void loop()
                     logger.info("Waiting until device disconnected");
                     state = IMU_WAITING_DISCONNECT;
                 }
-                // For other IMUs just continue looking
+                // For other addresses, just continue looking
             }
             break;
         case IMU_WAITING_RESPONSE:
