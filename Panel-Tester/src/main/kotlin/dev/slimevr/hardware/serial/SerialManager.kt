@@ -17,6 +17,11 @@ class SerialManager {
         openPorts.add(port)
     }
 
+    fun closePort(port: SerialPort) {
+        port.closePort()
+        openPorts.remove(port)
+    }
+
     fun closeAllPorts() {
         openPorts.forEach { it.closePort() }
         openPorts.clear()

@@ -4,18 +4,19 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 class Reporter(
-    number: Int
+    number: Int,
+    val logger: Logger
 ) {
     private val consoleLogger: Logger = Logger.getLogger("Reporter $number")
 
     fun log(level: Level, msg: String, params: Array<Object>) {
-        //TODO display in window
         consoleLogger.log(level, msg, params)
+        logger.log(level, msg, params)
     }
 
     fun log(level: Level, msg: String) {
-        //TODO display in console
         consoleLogger.log(level, msg)
+        logger.log(level, msg)
     }
 
     fun log(level: Level, msg: String, param: Object) = log(level, msg, arrayOf(param))
