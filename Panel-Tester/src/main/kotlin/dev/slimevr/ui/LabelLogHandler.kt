@@ -6,16 +6,15 @@ import java.util.logging.Handler
 import java.util.logging.LogRecord
 
 class LabelLogHandler(
-    val label: Label,
-    val maxLines: Int
+    private val label: Label,
+    private val maxLines: Int
 ): Handler() {
 
-    val allLines = ArrayList<String>(maxLines)
+    private val allLines = ArrayList<String>(maxLines)
 
     override fun publish(record: LogRecord?) {
         if (record != null) {
-            var lines = record.message.split("\n").toMutableList()
-            lines[0] = record.level.name + ": " + lines[0]
+            var lines = formatter.format(record).split("\n")
             addLines(lines)
         }
     }
@@ -25,6 +24,15 @@ class LabelLogHandler(
             allLines.removeAt(0)
         }
         allLines.addAll(lines)
+        updatePanel()
+    }
+
+    fun clear() {
+        allLines.clear()
+        updatePanel()
+    }
+
+    private fun updatePanel() {
         var fittingLines = label.size.rows
         var actualLines = fittingLines.coerceAtMost(allLines.size)
         var start = allLines.size - actualLines
@@ -35,5 +43,6 @@ class LabelLogHandler(
     }
 
     override fun close() {
+        clear()
     }
 }

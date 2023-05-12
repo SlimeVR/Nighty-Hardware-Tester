@@ -10,12 +10,12 @@ class Switchboard(
     pi4j: Context
 ) {
 
-    var enablePullUp = true
-    var ledPullUp = false
-    var defaultOutputState = if (enablePullUp) DigitalState.LOW else DigitalState.HIGH
-    var defaultLedState = if (ledPullUp) DigitalState.LOW else DigitalState.HIGH
+    private var enablePullUp = true
+    private var ledPullUp = false
+    private var defaultOutputState = if (enablePullUp) DigitalState.LOW else DigitalState.HIGH
+    private var defaultLedState = if (ledPullUp) DigitalState.LOW else DigitalState.HIGH
 
-    var enablePins = arrayOf(
+    private var enablePins = arrayOf(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(26).build(),
         DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(24).build(),
         DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(23).build(),
@@ -28,19 +28,19 @@ class Switchboard(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(7).build(),
     )
 
-    var batteryEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(5).build()
-    var vbusEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(6).build()
-    var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(13).build()
-    var flashPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(19).build()
+    private var batteryEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(5).build()
+    private var vbusEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(6).build()
+    private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(13).build()
+    private var flashPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(19).build()
 
-    var ledPins = arrayOf(
+    private var ledPins = arrayOf(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(18).build(),
         DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(27).build(),
         DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(22).build(),
         DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(17).build()
     )
 
-    var buttonPin = DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.PULL_UP).address(4).build()
+    private var buttonPin = DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.PULL_UP).address(4).build()
 
     init {
         powerOff()
@@ -118,4 +118,6 @@ class Switchboard(
             ledPins[ledNum].high()
         }
     }
+
+    fun isButtonPressed() = buttonPin.onState.isLow
 }

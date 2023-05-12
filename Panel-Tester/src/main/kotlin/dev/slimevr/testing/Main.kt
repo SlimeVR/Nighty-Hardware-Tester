@@ -1,17 +1,9 @@
 package dev.slimevr.testing
 
-import com.googlecode.lanterna.TerminalSize
-import com.googlecode.lanterna.TextColor
-import com.googlecode.lanterna.graphics.SimpleTheme
-import com.googlecode.lanterna.gui2.*
-import com.googlecode.lanterna.screen.Screen
-import com.googlecode.lanterna.screen.TerminalScreen
-import com.googlecode.lanterna.terminal.DefaultTerminalFactory
-import com.googlecode.lanterna.terminal.Terminal
-import dev.slimevr.ui.LabelLogHandler
-import dev.slimevr.ui.UI
-import java.util.logging.Level
-import java.util.logging.Logger
+import com.pi4j.Pi4J
+import com.pi4j.io.i2c.I2CProvider
+import dev.slimevr.database.RemoteTestingDatabase
+import dev.slimevr.ui.TesterUI
 
 
 fun main(args: Array<String>) {
@@ -19,7 +11,14 @@ fun main(args: Array<String>) {
     // Learn more about running applications: https://www.jetbrains.com/help/idea/running-applications.html.
     println("Program arguments: ${args.joinToString()}")
 
-    UI()
+    val testerUi = TesterUI()
 
+    val pi4j = Pi4J.newAutoContext()
+    val i2CProvider: I2CProvider = pi4j.provider("linuxfs-i2c")
 
+    val switchboard = Switchboard(pi4j)
+    var adcProvider = ADCProvider(i2CProvider)
+    var database = RemoteTestingDatabase()
+
+    TestingSuite(switchboard, adcProvider, listOf(database), testerUi).start()
 }
