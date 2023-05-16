@@ -17,7 +17,7 @@ class TesterUI {
 
     val fullLogHandler: LabelLogHandler
     val statusLogNandler: LabelLogHandler
-    val testedDevicesUI = ArrayList<TestingDeviceUI>(10)
+    val testedDevicesUI = mutableListOf<TestingDeviceUI>()
 
     init {
         // Setup terminal and screen layers
@@ -69,5 +69,20 @@ class TesterUI {
             gui.addWindowAndWait(window)
             exitProcess(0)
         }.start()
+    }
+
+    fun setStatus(device: Int, status: TestStatus) {
+        testedDevicesUI[device].statusColorPanel.color = status.color
+    }
+
+    fun setID(device: Int, id: String) {
+        testedDevicesUI[device].idLabel.text = id
+    }
+
+    fun clear() {
+        for(deviceUI in testedDevicesUI) {
+            deviceUI.idLabel.text = ""
+            deviceUI.statusColorPanel.color = TestStatus.DISCONNECTED.color
+        }
     }
 }

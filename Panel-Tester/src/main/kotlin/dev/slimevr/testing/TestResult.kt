@@ -7,4 +7,8 @@ data class TestResult(
     var timeEnd: Long,
     var endValue: String,
     var log: String
-)
+) {
+    override fun toString(): String {
+        return "$testName: $endValue (${status.name})"
+    }
+}
