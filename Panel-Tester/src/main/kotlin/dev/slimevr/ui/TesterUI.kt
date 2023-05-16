@@ -59,7 +59,7 @@ class TesterUI {
         statusLogNandler.formatter = OnlyTextLogFormatter()
         val statusLogger = Logger.getLogger("Status logger")
         statusLogger.addHandler(statusLogNandler)
-        statusLogger.useParentHandlers = false
+        //statusLogger.useParentHandlers = false
         mainPanel.addComponent(statusLabel, GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true,  true, 2, 1))
 
         window.component = mainPanel

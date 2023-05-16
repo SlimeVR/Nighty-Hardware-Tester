@@ -20,5 +20,5 @@ fun main(args: Array<String>) {
     var adcProvider = ADCProvider(i2CProvider)
     var database = RemoteTestingDatabase()
 
-    TestingSuite(switchboard, adcProvider, listOf(database), testerUi).start()
+    TestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10).start()
 }

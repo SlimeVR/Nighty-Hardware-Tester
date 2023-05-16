@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "1.8.21"
     application
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 group = "org.example"
@@ -25,6 +26,12 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("slimevr-tester")
+    archiveClassifier.set("")
+    archiveVersion.set("")
 }
 
 kotlin {

@@ -5,25 +5,30 @@ import com.fazecast.jSerialComm.SerialPortMessageListener
 
 class SerialManager {
 
-    val openPorts = ArrayList<SerialPort>()
+    val knownPorts = mutableListOf<SerialPort>()
 
     fun findNewPorts(): List<SerialPort> {
-        return SerialPort.getCommPorts().filter { !openPorts.contains(it) }
+        return SerialPort.getCommPorts().filter { !knownPorts.contains(it) and isValidPort(it) }
     }
 
     fun openPort(port: SerialPort, listener: SerialPortMessageListener) {
         port.openPort(200)
         port.addDataListener(listener)
-        openPorts.add(port)
+    }
+
+    fun markAsKnown(port: SerialPort) {
+        knownPorts.add(port)
     }
 
     fun closePort(port: SerialPort) {
         port.closePort()
-        openPorts.remove(port)
+        knownPorts.remove(port)
     }
 
     fun closeAllPorts() {
-        openPorts.forEach { it.closePort() }
-        openPorts.clear()
+        knownPorts.forEach { it.closePort() }
+        knownPorts.clear()
     }
+
+    fun isValidPort(port: SerialPort) =  port.portDescription in arrayOf("ch340", "cp21", "ch910", "usb", "seri")
 }

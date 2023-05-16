@@ -47,6 +47,22 @@ class Switchboard(
         disableAll()
     }
 
+    fun resetMode(mode: Boolean) {
+        if(mode) {
+            if (enablePullUp) {
+                rstPin.high()
+            } else {
+                rstPin.low()
+            }
+        }else {
+            if (enablePullUp) {
+                rstPin.low()
+            } else {
+                rstPin.high()
+            }
+        }
+    }
+
     fun enableDevice(deviceNum: Int) {
         if (enablePullUp) {
             enablePins[deviceNum].high()
