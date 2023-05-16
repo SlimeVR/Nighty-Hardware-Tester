@@ -17,8 +17,9 @@ class DeviceTest(
     val startTime = System.currentTimeMillis()
     var endTime = -1L
     var serialPort: SerialPort? = null
-    var serialLog = mutableListOf<String>()
+    val serialLog = mutableListOf<String>()
     var serialDisconnected = false
+    var serialLogRead = 0
 
     /**
      * If the device test should be saved to the database

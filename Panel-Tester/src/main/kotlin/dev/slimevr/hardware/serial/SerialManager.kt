@@ -11,9 +11,12 @@ class SerialManager {
         return SerialPort.getCommPorts().filter { !knownPorts.contains(it) and isValidPort(it) }
     }
 
-    fun openPort(port: SerialPort, listener: SerialPortMessageListener) {
-        port.openPort(200)
-        port.addDataListener(listener)
+    fun openPort(port: SerialPort, listener: SerialPortMessageListener): Boolean {
+        if(port.openPort(200)) {
+            port.addDataListener(listener)
+            return true
+        }
+        return false
     }
 
     fun markAsKnown(port: SerialPort) {

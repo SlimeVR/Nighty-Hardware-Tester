@@ -48,17 +48,33 @@ class Switchboard(
     }
 
     fun resetMode(mode: Boolean) {
-        if(mode) {
+        if (mode) {
             if (enablePullUp) {
                 rstPin.high()
             } else {
                 rstPin.low()
             }
-        }else {
+        } else {
             if (enablePullUp) {
                 rstPin.low()
             } else {
                 rstPin.high()
+            }
+        }
+    }
+
+    fun flashMode(mode: Boolean) {
+        if (mode) {
+            if (enablePullUp) {
+                flashPin.high()
+            } else {
+                flashPin.low()
+            }
+        } else {
+            if (enablePullUp) {
+                flashPin.low()
+            } else {
+                flashPin.high()
             }
         }
     }
