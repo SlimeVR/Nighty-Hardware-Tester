@@ -13,7 +13,14 @@ class TestingSuite(
     val devices: Int
 ): Thread("Testing suit thread") {
 
+    /**
+     * Full log and end report goes here
+     */
     private val logger: Logger = Logger.getLogger("Testing Suit")
+
+    /**
+     * Current testing status (stage, etc) goes here
+     */
     private var statusLogger: Logger = Logger.getLogger("Status logger")
 
     val powerBalanceTimeMS = 100L
@@ -30,6 +37,8 @@ class TestingSuite(
     val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -1.0f, 1f)
 
     val deviceTests = mutableListOf<DeviceTest>()
+    var testStart = 0L
+    var testEnd = 0L
 
     override fun run() {
         logger.info("Testing suit started~")
@@ -37,8 +46,9 @@ class TestingSuite(
             waitTestStart()
             testVBUSVoltages()
             testBATVoltages()
-            if(checkTestResultsAndReport())
-                break
+
+            checkTestResultsAndReport()
+            finishTestAndCommit()
         }
     }
 
@@ -59,7 +69,9 @@ class TestingSuite(
     }
 
     private fun finishTestAndCommit() {
-
+        logger.info("Committing the test results to database...")
+        testEnd = System.currentTimeMillis()
+        // TODO
     }
 
     private fun waitTestStart() {
@@ -76,6 +88,7 @@ class TestingSuite(
             sleep(10)
         }
         statusLogger.info("We goin'~")
+        testStart = System.currentTimeMillis()
         for(i in 0 until devices) {
             testerUi.setStatus(i, TestStatus.TESTING)
         }
@@ -88,7 +101,6 @@ class TestingSuite(
         for(i in 0 until devices) {
             val deviceTest = deviceTests[i]
             statusLogger.info("[${i+1}/$devices] Testing power from VBUS... ")
-            logger.info("[${i+1}/$devices] Testing power from VBUS... ")
             switchboard.enableDevice(i)
             sleep(powerBalanceTimeMS)
             val vbus = actionTestVBUS_REF.action(adcProvider.getVBUSVoltage(), "", System.currentTimeMillis())
@@ -119,7 +131,6 @@ class TestingSuite(
         for(i in 0 until devices) {
             val deviceTest = deviceTests[i]
             statusLogger.info("[${i+1}/$devices] Testing power from Battery... ")
-            logger.info("[${i+1}/$devices] Testing power from Battery... ")
             switchboard.enableDevice(i)
             sleep(powerBalanceTimeMS)
 
