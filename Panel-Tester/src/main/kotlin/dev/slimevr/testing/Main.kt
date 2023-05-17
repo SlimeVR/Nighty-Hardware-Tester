@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
 
     val switchboard = Switchboard(pi4j)
     var adcProvider = ADCProvider(i2CProvider)
-    var database = RemoteTestingDatabase()
+    var database = RemoteTestingDatabase("","")
 
     MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10).start()
 }

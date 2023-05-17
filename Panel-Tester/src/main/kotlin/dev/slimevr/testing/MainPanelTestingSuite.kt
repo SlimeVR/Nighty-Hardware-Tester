@@ -67,8 +67,9 @@ class MainPanelTestingSuite(
             openSerialPorts()
             testI2C()
             testIMU()
-            checkTestResultsAndReport()
-            finishTestAndCommit()
+            checkTestResults()
+            commitTestResults()
+            reportTestResults()
             testEnd()
         }
     }
@@ -243,17 +244,11 @@ class MainPanelTestingSuite(
         return true
     }
 
-    private fun checkTestResultsAndReport(): Boolean {
+    private fun checkTestResults(): Boolean {
         var failed = false
         for (device in deviceTests) {
             if (device.testStatus == TestStatus.ERROR) {
                 failed = true
-                logger.severe("[${device.deviceNum + 1}/$devices] Test failed:")
-                for (test in device.testsList) {
-                    if (test.status == TestStatus.ERROR) {
-                        logger.severe(test.toString())
-                    }
-                }
             } else {
                 device.testStatus = TestStatus.PASS
                 testerUi.setStatus(device.deviceNum, TestStatus.PASS)
@@ -263,9 +258,29 @@ class MainPanelTestingSuite(
         return failed
     }
 
-    private fun finishTestAndCommit() {
+    private fun reportTestResults() {
+        for (device in deviceTests) {
+            if (device.testStatus == TestStatus.ERROR) {
+                logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId} Test failed:")
+                for (test in device.testsList) {
+                    if (test.status == TestStatus.ERROR) {
+                        logger.severe(test.toString())
+                    }
+                }
+            } else {
+                logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId} Test success")
+            }
+        }
+    }
+
+    private fun commitTestResults() {
         logger.info("Committing the test results to database...")
-        // TODO write data to databases that are not created yet
+        for(device in deviceTests) {
+            for(db in testingDatabases) {
+                val response = db.sendTestData(device)
+                logger.info("[${device.deviceNum + 1}/$devices] ${device.deviceId}: $response")
+            }
+        }
     }
 
     private fun waitTestStart() {

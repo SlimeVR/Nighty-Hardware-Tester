@@ -22,6 +22,8 @@ dependencies {
     implementation("com.pi4j:pi4j-plugin-linuxfs:2.3.0")
     implementation("com.googlecode.lanterna:lanterna:3.1.1")
     implementation("com.fazecast:jSerialComm:[2.0.0,3.0.0)")
+
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.12.7.1")
 }
 
 tasks.test {
