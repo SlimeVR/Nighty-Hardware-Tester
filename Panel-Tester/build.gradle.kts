@@ -31,7 +31,7 @@ tasks.test {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("slimevr-tester")
+    archiveBaseName.set("slimevr")
     archiveClassifier.set("")
     archiveVersion.set("")
 }
@@ -41,5 +41,5 @@ kotlin {
 }
 
 application {
-    mainClass.set("MainKt")
+    mainClass.set("dev.slimevr.testing.Main")
 }
