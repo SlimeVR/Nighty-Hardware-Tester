@@ -4,74 +4,94 @@ import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.actions.*
 import dev.slimevr.ui.TesterUI
+import java.util.logging.Level
 import java.util.logging.Logger
 
 class MainPanelTestingSuite(
-    val switchboard: Switchboard,
-    val adcProvider: ADCProvider,
-    val testingDatabases: List<TestingDatabase>,
-    val testerUi: TesterUI,
-    val devices: Int
+    private val switchboard: Switchboard,
+    private val adcProvider: ADCProvider,
+    private val testingDatabases: List<TestingDatabase>,
+    private val testerUi: TesterUI,
+    private val devices: Int,
+    private val logger: Logger,
+    private var statusLogger: Logger
 ) : Thread("Testing suit thread") {
 
-    /**
-     * Full log and end report goes here
-     */
-    private val logger: Logger = Logger.getLogger("Testing Suit")
+    private val powerBalanceTimeMS = 100L
+    private var serialBootTimeMS = 300L
+    private val bootTimeMS = 1500L
+    private val resetTimeMS = 300L
 
-    /**
-     * Current testing status (stage, etc) goes here
-     */
-    private var statusLogger: Logger = Logger.getLogger("Status logger")
+    private val serialManager = SerialManager()
 
-    val powerBalanceTimeMS = 100L
-    var serialBootTimeMS = 300L
-    val bootTimeMS = 1500L
-    val resetTimeMS = 300L
+    private val actionTestVBUS_REF = VoltageTestAction("VBUS reference", 4.2f, 5.1f)
+    private val actionTestVBUS_VCC = VoltageTestAction("VCC voltage from VBUS power", 3.3f, 5.1f)
+    private val actionTestVBUS_3v3 = VoltageTestAction("3v3 voltage from VBUS power", 3.0f, 3.5f)
+    private val actionTestVBUS_Bat = VoltageTestAction("Bat voltage from VBUS power", 4.0f, 4.5f)
 
-    val serialManager = SerialManager()
+    private val actionTestBAT_REF = VoltageTestAction("Bat reference", 4.2f, 5.1f)
+    private val actionTestBAT_VCC = VoltageTestAction("VCC voltage from Bat power", 3.3f, 5.1f)
+    private val actionTestBAT_3v3 = VoltageTestAction("3v3 voltage from Bat power", 3.0f, 3.5f)
+    private val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -1.0f, 1f)
 
-    val actionTestVBUS_REF = VoltageTestAction("VBUS reference", 4.2f, 5.1f)
-    val actionTestVBUS_VCC = VoltageTestAction("VCC voltage from VBUS power", 3.3f, 5.1f)
-    val actionTestVBUS_3v3 = VoltageTestAction("3v3 voltage from VBUS power", 3.0f, 3.5f)
-    val actionTestVBUS_Bat = VoltageTestAction("Bat voltage from VBUS power", 4.0f, 4.5f)
+    private val serialFound = SuccessAction("Find serial port")
+    private val serialOpened = SuccessAction("Open serial port")
 
-    val actionTestBAT_REF = VoltageTestAction("Bat reference", 4.2f, 5.1f)
-    val actionTestBAT_VCC = VoltageTestAction("VCC voltage from Bat power", 3.3f, 5.1f)
-    val actionTestBAT_3v3 = VoltageTestAction("3v3 voltage from Bat power", 3.0f, 3.5f)
-    val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -1.0f, 1f)
+    private val firmwareFile = ""
 
-    val serialFound = SuccessAction("Find serial port")
-    val serialOpened = SuccessAction("Open serial port")
-
-    val firmwareFile = ""
-
-    val deviceTests = mutableListOf<DeviceTest>()
-    var testStart = 0L
-    val flashingRequired = BooleanArray(devices).apply { fill(true) }
+    private val deviceTests = mutableListOf<DeviceTest>()
+    private var testStart = 0L
+    private val flashingRequired = BooleanArray(devices).apply { fill(true) }
 
     override fun run() {
+        try {
+            selfTest()
+        } catch(exception: Throwable) {
+            logger.log(Level.SEVERE, "Self-test failed", exception)
+            return
+        }
         logger.info("Testing suit started~")
         while (true) {
-            waitTestStart()
-            testVBUSVoltages()
-            testBATVoltages()
-            if (!enumerateSerialDevices()) {
-                testEnd()
-                continue
+            try {
+                waitTestStart()
+            } catch(exception: Throwable) {
+                logger.log(Level.SEVERE, "Standby error, can't continue", exception)
+                return
             }
-            // At this stage all devices should be enabled and only reboot via pins is allowed
-            readDeviceIDs()
-            // TODO Add check if flashing required
-            flashDevices()
-            openSerialPorts()
-            testI2C()
-            testIMU()
-            checkTestResults()
-            commitTestResults()
-            reportTestResults()
-            testEnd()
+            try {
+                testVBUSVoltages()
+                testBATVoltages()
+                /*
+                if (!enumerateSerialDevices()) {
+                    testEnd()
+                    continue
+                }
+                // At this stage all devices should be enabled and only reboot via pins is allowed
+                readDeviceIDs()
+                // TODO Add check if flashing required
+                flashDevices()
+                openSerialPorts()
+                testI2C()
+                testIMU()
+                checkTestResults()
+                commitTestResults()
+                // */
+                reportTestResults()
+                testEnd()
+            } catch(exception: Throwable) {
+                logger.log(Level.SEVERE, "Tester error", exception)
+            }
         }
+    }
+
+    private fun selfTest() {
+        logger.info("Testing suite self-test:")
+        logger.info("VBUS voltage: ${adcProvider.getVBUSVoltage()}")
+        logger.info("BAT voltage: ${adcProvider.getBatVoltage()}")
+        logger.info("3v3 voltage: ${adcProvider.get3v3Voltage()}")
+        logger.info("VCC voltage: ${adcProvider.getVCCVoltage()}")
+        logger.info("Chrg voltage: ${adcProvider.getChrgVoltage()}")
+        logger.info("Full voltage: ${adcProvider.getFullVoltage()}")
     }
 
     private fun testI2C() {
@@ -188,7 +208,6 @@ class MainPanelTestingSuite(
                 }
             }
         }
-
     }
 
     private fun testEnd() {
@@ -284,17 +303,17 @@ class MainPanelTestingSuite(
     }
 
     private fun waitTestStart() {
-        testerUi.statusLogNandler.clear()
         switchboard.disableAll()
         switchboard.powerOff()
+        statusLogger.info("Ready to start the test")
+        while (!switchboard.isButtonPressed()) {
+            sleep(10)
+        }
+        testerUi.statusLogHandler.clear()
         testerUi.clear()
         deviceTests.clear()
         for (i in 0 until devices) {
             deviceTests.add(DeviceTest(i))
-        }
-        statusLogger.info("Ready to start the test")
-        while (!switchboard.isButtonPressed()) {
-            sleep(10)
         }
         statusLogger.info("We goin'~")
         testStart = System.currentTimeMillis()

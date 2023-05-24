@@ -113,8 +113,8 @@ const val ADS1115_ADDRESS_SCL = 0x4Bu
 class ADS1X15(
     device: I2C) {
 
-    private var _config: UInt = 0u
-    private var _conversionDelay: UInt = 0u
+    private var _config: UInt = ADS_CONF_COMP or ADS_CONF_GAIN or ADS_CONF_RES_16 or ADS_CONF_CHAN_4
+    private var _conversionDelay: UInt = ADS1115_CONVERSION_DELAY
     private var _bitShift: UInt = 0u
     private var _gain: UInt = 0u
     private var _mode: UInt = 0u
@@ -146,28 +146,28 @@ class ADS1X15(
         config = config or _mode                            //  bit 8
         config = config or _datarate                        //  bit 5-7
         if (_compMode > 0u)
-            config = config or ADS1X15_COMP_MODE_WINDOW;         //  bit 4      comparator modi
+            config = config or ADS1X15_COMP_MODE_WINDOW         //  bit 4      comparator modi
         else
-            config = config or ADS1X15_COMP_MODE_TRADITIONAL;
+            config = config or ADS1X15_COMP_MODE_TRADITIONAL
         if (_compPol > 0u)
-            config = config or ADS1X15_COMP_POL_ACTIV_HIGH;      //  bit 3      ALERT active value
+            config = config or ADS1X15_COMP_POL_ACTIV_HIGH      //  bit 3      ALERT active value
         else
-            config = config or ADS1X15_COMP_POL_ACTIV_LOW;
+            config = config or ADS1X15_COMP_POL_ACTIV_LOW
         if (_compLatch > 0u)
-            config = config or ADS1X15_COMP_LATCH;
+            config = config or ADS1X15_COMP_LATCH
         else
-            config = config or ADS1X15_COMP_NON_LATCH;           //  bit 2      ALERT latching
-        config = config or _compQueConvert;                                  //  bit 0..1   ALERT mode
-        registerConfig.write(config.toInt())
+            config = config or ADS1X15_COMP_NON_LATCH           //  bit 2      ALERT latching
+        config = config or _compQueConvert                                  //  bit 0..1   ALERT mode
+        registerConfig.writeWord(config.toInt())
     }
 
     fun getVoltage(pin: UInt): Float = toVoltage(readADC(pin))
 
     fun readADC(pin: UInt): Int {
         if (pin >= 4u)
-            return 0;
+            return 0
         val mode = (4u + pin) shl 12  //  pin to mask
-        return _readADC(mode);
+        return _readADC(mode)
     }
 
     private fun _readADC(readmode: UInt): Int {
@@ -175,13 +175,13 @@ class ADS1X15(
         if (_mode == ADS1X15_MODE_SINGLE)
         {
             while ( isBusy() )
-                Thread.yield();   //  wait for conversion; yield for ESP.
+                Thread.yield()   //  wait for conversion; yield for ESP.
         }
         else
         {
-            Thread.sleep(_conversionDelay.toLong());      //  TODO needed in continuous mode?
+            Thread.sleep(_conversionDelay.toLong())      //  TODO needed in continuous mode?
         }
-        return getValue();
+        return getValue()
     }
 
     fun getValue(): Int {
@@ -199,16 +199,16 @@ class ADS1X15(
         if (volts < 0)
             return volts
 
-        volts *= value;
+        volts *= value
         if (_config and ADS_CONF_RES_16 > 0u)
         {
-            volts /= 32767;  //  value = 16 bits - sign bit = 15 bits mantissa
+            volts /= 32767  //  value = 16 bits - sign bit = 15 bits mantissa
         }
         else
         {
-            volts /= 2047;   //  value = 12 bits - sign bit = 11 bit mantissa
+            volts /= 2047   //  value = 12 bits - sign bit = 11 bit mantissa
         }
-        return volts;
+        return volts
     }
 
     fun getMaxVoltage(): Float {
@@ -226,7 +226,7 @@ class ADS1X15(
     fun isBusy(): Boolean = !isReady()
 
     fun isReady(): Boolean {
-        return (registerConfig.read() and ADS1X15_OS_NOT_BUSY.toInt()) > 0
+        return (registerConfig.readWord() and ADS1X15_OS_NOT_BUSY.toInt()) > 0
     }
 
 }

@@ -16,31 +16,34 @@ class Switchboard(
     private var defaultLedState = if (ledPullUp) DigitalState.LOW else DigitalState.HIGH
 
     private var enablePins = arrayOf(
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(26).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(24).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(23).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(21).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(20).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(25).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(16).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(12).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(8).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(7).build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(26).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(24).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(23).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(21).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(20).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(25).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(16).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(12).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(8).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(7).provider("pigpio-digital-output").build(),
     )
 
-    private var batteryEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(5).build()
-    private var vbusEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(6).build()
-    private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(13).build()
-    private var flashPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).address(19).build()
+    private var batteryEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(5).provider("pigpio-digital-output").build()
+    private var vbusEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(6).provider("pigpio-digital-output").build()
+    private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(13).provider("pigpio-digital-output").build()
+    private var flashPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(19).provider("pigpio-digital-output").build()
 
     private var ledPins = arrayOf(
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(18).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(27).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(22).build(),
-        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).address(17).build()
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).initial(defaultLedState).address(18).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).initial(defaultLedState).address(27).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).initial(defaultLedState).address(22).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).initial(defaultLedState).address(17).provider("pigpio-digital-output").build()
     )
 
-    private var buttonPin = DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.PULL_UP).address(4).build()
+    private var buttonPin =
+        pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.PULL_UP).address(4)
+            .debounce(3000L)
+            .provider("pigpio-digital-input"))
 
     init {
         powerOff()
@@ -49,89 +52,62 @@ class Switchboard(
 
     fun resetMode(mode: Boolean) {
         if (mode) {
-            if (enablePullUp) {
-                rstPin.high()
-            } else {
-                rstPin.low()
-            }
+            enable(rstPin)
         } else {
-            if (enablePullUp) {
-                rstPin.low()
-            } else {
-                rstPin.high()
-            }
+            disable(rstPin)
         }
     }
 
     fun flashMode(mode: Boolean) {
         if (mode) {
-            if (enablePullUp) {
-                flashPin.high()
-            } else {
-                flashPin.low()
-            }
+            enable(flashPin)
         } else {
-            if (enablePullUp) {
-                flashPin.low()
-            } else {
-                flashPin.high()
-            }
+            disable(flashPin)
         }
     }
 
     fun enableDevice(deviceNum: Int) {
-        if (enablePullUp) {
-            enablePins[deviceNum].high()
-        } else {
-            enablePins[deviceNum].low()
-        }
+        enable(enablePins[deviceNum])
     }
 
     fun disableDevice(deviceNum: Int) {
-        if (enablePullUp) {
-            enablePins[deviceNum].low()
-        } else {
-            enablePins[deviceNum].high()
-        }
+        disable(enablePins[deviceNum])
     }
 
     fun disableAll() {
         enablePins.forEach {
-            if (enablePullUp) {
-                it.low()
-            } else {
-                it.high()
-            }
+            disable(it)
         }
     }
 
     fun powerOff() {
-        if (enablePullUp) {
-            batteryEnablePin.low()
-            vbusEnablePin.low()
-        } else {
-            batteryEnablePin.high()
-            vbusEnablePin.high()
-        }
+        disable(batteryEnablePin)
+        disable(vbusEnablePin)
     }
 
     fun powerBattery() {
-        if (enablePullUp) {
-            vbusEnablePin.low()
-            batteryEnablePin.high()
-        } else {
-            vbusEnablePin.high()
-            batteryEnablePin.low()
-        }
+        disable(vbusEnablePin)
+        enable(batteryEnablePin)
     }
 
     fun powerVbus() {
+        disable(batteryEnablePin)
+        enable(vbusEnablePin)
+    }
+
+    fun enable(output: DigitalOutput) {
         if (enablePullUp) {
-            batteryEnablePin.low()
-            vbusEnablePin.high()
+            output.high()
         } else {
-            batteryEnablePin.high()
-            vbusEnablePin.low()
+            output.low()
+        }
+    }
+
+    fun disable(output: DigitalOutput) {
+        if (enablePullUp) {
+            output.low()
+        } else {
+            output.high()
         }
     }
 
@@ -151,5 +127,5 @@ class Switchboard(
         }
     }
 
-    fun isButtonPressed() = buttonPin.onState.isLow
+    fun isButtonPressed() = buttonPin.isLow
 }

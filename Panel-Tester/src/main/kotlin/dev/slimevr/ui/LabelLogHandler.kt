@@ -6,7 +6,7 @@ import java.util.logging.Handler
 import java.util.logging.LogRecord
 
 class LabelLogHandler(
-    private val label: Label,
+    private val label: SlimyLabel,
     private val maxLines: Int
 ): Handler() {
 
@@ -14,7 +14,8 @@ class LabelLogHandler(
 
     override fun publish(record: LogRecord?) {
         if (record != null) {
-            var lines = formatter.format(record).split("\n")
+            //label.labelWidth = label.size.columns
+            var lines = formatter.format(record).split("\n").toMutableList().filter { it.isNotBlank() }
             addLines(lines)
         }
     }
@@ -33,10 +34,11 @@ class LabelLogHandler(
     }
 
     private fun updatePanel() {
-        var fittingLines = label.size.rows
-        var actualLines = fittingLines.coerceAtMost(allLines.size)
-        var start = allLines.size - actualLines
-        label.text = allLines.subList(start, start + actualLines).joinToString("\n")
+        //var fittingLines = label.size.rows
+        //var actualLines = fittingLines.coerceAtMost(allLines.size)
+        //var start = allLines.size - actualLines
+        //label.text = allLines.subList(start, start + actualLines).joinToString("\n")
+        label.text = allLines.joinToString("\n")
     }
 
     override fun flush() {

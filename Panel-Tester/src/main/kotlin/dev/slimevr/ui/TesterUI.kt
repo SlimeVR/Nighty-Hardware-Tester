@@ -8,18 +8,22 @@ import com.googlecode.lanterna.screen.Screen
 import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
+import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.TestStatus
-import java.util.*
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
-class TesterUI {
+class TesterUI(
+    globalLogger: Logger,
+    statusLogger: Logger
+) {
 
     val fullLogHandler: LabelLogHandler
-    val statusLogNandler: LabelLogHandler
+    val statusLogHandler: LabelLogHandler
     val testedDevicesUI = mutableListOf<TestingDeviceUI>()
 
     init {
+        LogManager.removeNonFileHandlers()
         // Setup terminal and screen layers
         val terminal: Terminal = DefaultTerminalFactory().createTerminal()
         val screen: Screen = TerminalScreen(terminal)
@@ -27,40 +31,53 @@ class TesterUI {
         // Create window to hold the panel
         val window = BasicWindow()
         window.theme = SimpleTheme(TextColor.ANSI.WHITE, TextColor.ANSI.BLACK)
-        window.setHints(listOf(Window.Hint.FULL_SCREEN))
+        window.setHints(listOf(Window.Hint.FULL_SCREEN, Window.Hint.FIT_TERMINAL_WINDOW))
 
         // Create panel to hold components
 
         val mainPanel = Panel()
         mainPanel.setLayoutManager(GridLayout(5))
 
-        for(i in 1..10) {
+        for (i in 1..10) {
             val testerPanel = Panel()
-            val statusColorPanel = EmptySpace(TestStatus.DISCONNECTED.color, TerminalSize(16,1))
-            val idLabel = Label(UUID.randomUUID().toString())
+            val statusColorPanel = EmptySpace(TestStatus.DISCONNECTED.color,
+                TerminalSize(1, 1))
+            val idLabel = Label("Board $i")
             testerPanel.setLayoutManager(GridLayout(1))
             testerPanel.addComponent(statusColorPanel, GridLayout.createHorizontallyFilledLayoutData())
             testerPanel.addComponent(idLabel, GridLayout.createHorizontallyFilledLayoutData())
-            mainPanel.addComponent(testerPanel.withBorder(Borders.singleLine("Board $i")), GridLayout.createHorizontallyFilledLayoutData())
+            mainPanel.addComponent(
+                testerPanel.withBorder(Borders.singleLine("Board $i")),
+                GridLayout.createHorizontallyFilledLayoutData()
+            )
 
             val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel)
             testedDevicesUI.add(deviceUI)
         }
-        val logLabel = Label("")
+        val logLabel = SlimyLabel("")
         logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
         fullLogHandler = LabelLogHandler(logLabel, 100)
-        fullLogHandler.formatter = LogFormatter()
-        Logger.getLogger("").addHandler(fullLogHandler)
-        mainPanel.addComponent(logLabel.withBorder(Borders.singleLine("Log")), GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true,  true, 3, 1))
+        fullLogHandler.formatter = LabelLogFormatter()
+        globalLogger.addHandler(fullLogHandler)
+        mainPanel.addComponent(
+            logLabel.withBorder(Borders.singleLine("Log")),
+            GridLayout.createLayoutData(GridLayout.Alignment.FILL,
+                GridLayout.Alignment.FILL, false,
+                false, 4, 1)
+        )
 
-        val statusLabel = Label("")
+        val statusLabel = SlimyLabel("")
         statusLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
-        statusLogNandler = LabelLogHandler(statusLabel, 100)
-        statusLogNandler.formatter = OnlyTextLogFormatter()
-        val statusLogger = Logger.getLogger("Status logger")
-        statusLogger.addHandler(statusLogNandler)
+        statusLogHandler = LabelLogHandler(statusLabel, 100)
+        statusLogHandler.formatter = OnlyTextLogFormatter()
+        statusLogger.addHandler(statusLogHandler)
         //statusLogger.useParentHandlers = false
-        mainPanel.addComponent(statusLabel, GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true,  true, 2, 1))
+        mainPanel.addComponent(
+            statusLabel.withBorder(Borders.singleLine("Status")),
+            GridLayout.createLayoutData(GridLayout.Alignment.FILL,
+                GridLayout.Alignment.FILL, false,
+                true, 1, 1)
+        )
 
         window.component = mainPanel
         // Create gui and start gui
@@ -80,7 +97,7 @@ class TesterUI {
     }
 
     fun clear() {
-        for(deviceUI in testedDevicesUI) {
+        for (deviceUI in testedDevicesUI) {
             deviceUI.idLabel.text = ""
             deviceUI.statusColorPanel.color = TestStatus.DISCONNECTED.color
         }
