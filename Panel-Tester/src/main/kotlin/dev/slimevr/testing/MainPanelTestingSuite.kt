@@ -1,5 +1,6 @@
 package dev.slimevr.testing
 
+import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.actions.*
@@ -17,22 +18,22 @@ class MainPanelTestingSuite(
     private var statusLogger: Logger
 ) : Thread("Testing suit thread") {
 
-    private val powerBalanceTimeMS = 100L
-    private var serialBootTimeMS = 300L
+    private val powerBalanceTimeMS = 150L
+    private var serialBootTimeMS = 600L
     private val bootTimeMS = 1500L
     private val resetTimeMS = 300L
 
     private val serialManager = SerialManager()
 
-    private val actionTestVBUS_REF = VoltageTestAction("VBUS reference", 4.2f, 5.1f)
-    private val actionTestVBUS_VCC = VoltageTestAction("VCC voltage from VBUS power", 3.3f, 5.1f)
-    private val actionTestVBUS_3v3 = VoltageTestAction("3v3 voltage from VBUS power", 3.0f, 3.5f)
+    private val actionTestVBUS_REF = VoltageTestAction("VBUS reference", 4.2f, 5.5f)
+    private val actionTestVBUS_VCC = VoltageTestAction("VCC voltage from VBUS power", 3.3f, 5.5f)
+    private val actionTestVBUS_3v3 = VoltageTestAction("3v3 voltage from VBUS power", 2.9f, 3.5f)
     private val actionTestVBUS_Bat = VoltageTestAction("Bat voltage from VBUS power", 4.0f, 4.5f)
 
-    private val actionTestBAT_REF = VoltageTestAction("Bat reference", 4.2f, 5.1f)
-    private val actionTestBAT_VCC = VoltageTestAction("VCC voltage from Bat power", 3.3f, 5.1f)
-    private val actionTestBAT_3v3 = VoltageTestAction("3v3 voltage from Bat power", 3.0f, 3.5f)
-    private val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -1.0f, 1f)
+    private val actionTestBAT_REF = VoltageTestAction("Bat reference", 4.2f, 5.5f)
+    private val actionTestBAT_VCC = VoltageTestAction("VCC voltage from Bat power", 3.3f, 5.5f)
+    private val actionTestBAT_3v3 = VoltageTestAction("3v3 voltage from Bat power", 2.9f, 3.5f)
+    private val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -1.0f, 2f)
 
     private val serialFound = SuccessAction("Find serial port")
     private val serialOpened = SuccessAction("Open serial port")
@@ -54,33 +55,56 @@ class MainPanelTestingSuite(
         while (true) {
             try {
                 waitTestStart()
+                testStart()
             } catch(exception: Throwable) {
                 logger.log(Level.SEVERE, "Standby error, can't continue", exception)
                 return
             }
+
+            switchboard.powerOff()
+            switchboard.disableAll()
+            logger.log(Level.INFO, "Enabling all devices")
+            deviceTests.forEach {
+                switchboard.enableDevice(it.deviceNum)
+            }
+            logger.log(Level.INFO, "VBUS Power on")
+            switchboard.powerVbus()
+            sleep(2000)
+            logger.log(Level.INFO, "Flashing...")
+            flash()
+            while (!switchboard.isButtonPressed()) {
+                sleep(10)
+            }
+            logger.log(Level.INFO, "BAT Power on")
+            switchboard.powerOff()
+            switchboard.powerBattery()
+            sleep(2000)
+            while (!switchboard.isButtonPressed()) {
+                sleep(10)
+            }
+            // */
             try {
                 testVBUSVoltages()
                 testBATVoltages()
-                /*
-                if (!enumerateSerialDevices()) {
-                    testEnd()
-                    continue
+
+                if (enumerateSerialDevices()) {
+                    // At this stage all devices should be enabled and only reboot via pins is allowed
+                    readDeviceIDs()
+                    // TODO Add check if flashing required
+                    //flashDevices()
+                    openSerialPorts()
+                    testI2C()
+                    testIMU()
                 }
-                // At this stage all devices should be enabled and only reboot via pins is allowed
-                readDeviceIDs()
-                // TODO Add check if flashing required
-                flashDevices()
-                openSerialPorts()
-                testI2C()
-                testIMU()
-                checkTestResults()
-                commitTestResults()
                 // */
+                checkTestResults()
+                //commitTestResults()
                 reportTestResults()
                 testEnd()
             } catch(exception: Throwable) {
                 logger.log(Level.SEVERE, "Tester error", exception)
             }
+            break
         }
     }
 
@@ -198,7 +222,7 @@ class MainPanelTestingSuite(
             } else {
                 val macAction = ExecuteCommandAction(
                     "Read MAC address", arrayOf("MAC: "), emptyArray(),
-                    "esptool --port ${device.serialPort!!.systemPortPath} read_mac", 60000
+                    "esptool --port ${device.serialPort!!.systemPortPath} read_mac", 10000
                 )
                 val macResult = macAction.action("", "", System.currentTimeMillis())
                 addResult(device, macResult)
@@ -239,21 +263,28 @@ class MainPanelTestingSuite(
                         logger.severe("[${device.deviceNum + 1}/$devices] More than one new serial device detected")
                         logger.severe(
                             "Tester can not proceed from here and the testing will end immediately, "
-                                + "no results will be saved"
+                                + "no results will be saved. Found ports:"
                         )
+                        newPorts.forEach {
+                            logger.severe("${it.portDescription} : ${it.descriptivePortName} : ${it.systemPortPath} : ${it.portLocation}")
+                        }
+                        for (device in deviceTests) {
+                            device.addTestResult(serialFound.action(false, "More than one serial port found: ${newPorts.joinToString { p -> p.descriptivePortName + " " + p.systemPortPath }}", testStart))
+                        }
                         return false
                     } else if (newPorts.size == 1) {
                         device.serialPort = newPorts.first()
                         serialManager.markAsKnown(device.serialPort!!)
+                        logger.info("[${device.deviceNum + 1}/$devices] Device used: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}")
                         break
                     }
                 }
                 if (device.serialPort == null) {
-                    val connectTest = serialFound.action(false, "", testStart)
+                    val connectTest = serialFound.action(false, "No serial ports found", testStart)
                     addResult(device, connectTest)
                     continue
                 } else {
-                    val connectTest = serialFound.action(true, "", testStart)
+                    val connectTest = serialFound.action(true, "Serial port found: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}", testStart)
                     addResult(device, connectTest)
                     foundSerials++
                 }
@@ -287,6 +318,7 @@ class MainPanelTestingSuite(
                     }
                 }
             } else {
+
                 logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId} Test success")
             }
         }
@@ -309,6 +341,9 @@ class MainPanelTestingSuite(
         while (!switchboard.isButtonPressed()) {
             sleep(10)
         }
+    }
+
+    private fun testStart() {
         testerUi.statusLogHandler.clear()
         testerUi.clear()
         deviceTests.clear()

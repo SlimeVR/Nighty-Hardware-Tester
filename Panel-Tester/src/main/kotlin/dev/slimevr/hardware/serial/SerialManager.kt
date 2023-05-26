@@ -5,10 +5,10 @@ import com.fazecast.jSerialComm.SerialPortMessageListener
 
 class SerialManager {
 
-    val knownPorts = mutableListOf<SerialPort>()
+    private val knownPorts = mutableListOf<SerialPort>()
 
     fun findNewPorts(): List<SerialPort> {
-        return SerialPort.getCommPorts().filter { !knownPorts.contains(it) and isValidPort(it) }
+        return SerialPort.getCommPorts().filter { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } == 0) and isValidPort(it) }
     }
 
     fun openPort(port: SerialPort, listener: SerialPortMessageListener): Boolean {
@@ -33,5 +33,13 @@ class SerialManager {
         knownPorts.clear()
     }
 
-    fun isValidPort(port: SerialPort) =  port.portDescription in arrayOf("ch340", "cp21", "ch910", "usb", "seri")
+    private fun isValidPort(port: SerialPort): Boolean {
+        if(!port.systemPortPath.startsWith("/dev/ttyUSB"))
+            return false
+        arrayOf("ch340", "cp21", "ch910", "usb", "seri").forEach {
+            if(port.descriptivePortName.lowercase().contains(it))
+                return true
+        }
+        return false
+    }
 }

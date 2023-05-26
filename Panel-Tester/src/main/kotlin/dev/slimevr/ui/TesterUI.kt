@@ -102,4 +102,6 @@ class TesterUI(
             deviceUI.statusColorPanel.color = TestStatus.DISCONNECTED.color
         }
     }
+
+
 }

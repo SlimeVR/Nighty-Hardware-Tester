@@ -2,6 +2,8 @@ package dev.slimevr.testing.actions
 
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
+import java.util.concurrent.CompletableFuture
+import java.util.logging.Logger
 
 /**
  * Executes console command and tests output for patterns.
@@ -17,6 +19,8 @@ class ExecuteCommandAction(
     private val timeout: Long
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
 
+    private val logger: Logger = Logger.getLogger("ExecuteCommandAction")
+
     private val processBuilder: ProcessBuilder =
         ProcessBuilder(command.split(" ")).redirectError(ProcessBuilder.Redirect.PIPE).redirectOutput(
             ProcessBuilder.Redirect.PIPE
@@ -27,22 +31,25 @@ class ExecuteCommandAction(
         if (log.isNotBlank())
             fullLog.add(log)
         var logStart = fullLog.size
+        logger.info("Starting process: " + processBuilder.command().joinToString(" "))
         val process = processBuilder.start()
         val endTime = System.currentTimeMillis() + timeout
         val errorReader = process.errorReader()
         val inputReader = process.inputReader()
         var testResult = TestStatus.TESTING
         var matchedString = ""
-        while (process.isAlive) {
+        var destroyed = false
+        do {
             when (val line = errorReader.readLine()) {
                 null -> break
-                else -> fullLog.add(line)
+                else -> if(line.isNotBlank()) fullLog.add(line)
             }
             when (val line = inputReader.readLine()) {
                 null -> break
-                else -> fullLog.add(line)
+                else -> if(line.isNotBlank()) fullLog.add(line)
             }
             fullLog.subList(logStart, fullLog.size).forEach {
+                logger.info(it)
                 val result = matchString(it)
                 if ((result == MatchResult.SUCCESS) && (testResult != TestStatus.ERROR)) {
                     matchedString = it
@@ -51,14 +58,15 @@ class ExecuteCommandAction(
                     testResult = TestStatus.ERROR
                 }
             }
-            if (timeout > 0 && endTime < System.currentTimeMillis()) {
+            if (!destroyed && timeout > 0 && endTime < System.currentTimeMillis()) {
                 process.destroyForcibly()
                 fullLog.add("Forcibly destroying process after ${timeout / 1000}s")
                 testResult = TestStatus.ERROR
-                break
+                destroyed = true
             }
             logStart = fullLog.size
-        }
+        } while(process.isAlive)
+        fullLog.add("Process ended with ${process.exitValue()} exit code")
         // If we didn't pass the test yet, it's a failure
         if (testResult == TestStatus.TESTING) {
             testResult = if (successPatterns.isEmpty() && failurePatterns.isEmpty() && process.exitValue() == 0)
@@ -72,6 +80,6 @@ class ExecuteCommandAction(
             startTime,
             System.currentTimeMillis(),
             matchedString,
-            fullLog.joinToString { "\n" })
+            fullLog.joinToString("\n"))
     }
 }

@@ -1,17 +1,20 @@
 package dev.slimevr.ui
 
+import com.googlecode.lanterna.TextColor
+import com.googlecode.lanterna.gui2.TextGUIGraphics
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.MessageFormat
 import java.text.SimpleDateFormat
 import java.util.logging.Formatter
+import java.util.logging.Level
 import java.util.logging.LogRecord
 
 class LabelLogFormatter : Formatter() {
     override fun format(record: LogRecord): String {
         val sb = StringBuilder()
-        sb.append(dateFormat.format(record.millis))
         val localLevel = record.level
+        sb.append(dateFormat.format(record.millis))
         sb.append(" [").append(localLevel.localizedName).append("] ")
         sb.append(record.message)
         sb.append('\n')
