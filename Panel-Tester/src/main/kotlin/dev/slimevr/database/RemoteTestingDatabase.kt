@@ -9,6 +9,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpRequest.BodyPublishers
 import java.net.http.HttpResponse.BodyHandlers
+import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util.Date
 
@@ -17,7 +18,9 @@ class RemoteTestingDatabase(
     val rpc_password: String,
     val testerName: String,
     val testType: String
-): TestingDatabase {
+) : TestingDatabase {
+
+    var dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
     val httpClient = HttpClient.newHttpClient()
     val httpRequestBuilder = HttpRequest.newBuilder(URI.create(rpc_url))
@@ -26,7 +29,9 @@ class RemoteTestingDatabase(
         .header("Authorization", rpc_password)
 
     override fun sendTestData(device: DeviceTest): String {
-        val writer= ObjectMapper().writer().with(SerializationFeature.INDENT_OUTPUT)
+        if(device.deviceId.isBlank())
+            return "No ID, not sent"
+        val writer = ObjectMapper().writer().with(SerializationFeature.INDENT_OUTPUT)
         val body = ApiRequestBody("insert_test_report", toReport(device))
         val json = writer.writeValueAsString(body)
         val request = httpRequestBuilder.POST(BodyPublishers.ofString(json)).build()
@@ -39,8 +44,8 @@ class RemoteTestingDatabase(
         testType,
         toTestValues(device),
         testerName,
-        Date(device.startTime),
-        Date(device.endTime)
+        dateFormat.format(Date(device.startTime)),
+        dateFormat.format(Date(device.endTime))
     )
 
     private fun toTestValues(device: DeviceTest) = device.testsList.map {
@@ -50,8 +55,8 @@ class RemoteTestingDatabase(
             it.endValue,
             it.log,
             it.status != TestStatus.PASS,
-            Date(it.timeStart),
-            Date(it.timeEnd)
+            dateFormat.format(Date(it.timeStart)),
+            dateFormat.format(Date(it.timeEnd))
         )
     }
 
@@ -65,17 +70,17 @@ class RemoteTestingDatabase(
         val type: String,
         val values: List<TestReportValue>,
         val tester: String,
-        val startedAt: Date,
-        val endedAt: Date
+        val startedAt: String,
+        val endedAt: String
     )
 
     data class TestReportValue(
         val step: String,
-        val conditions: String,
+        val condition: String,
         val value: String,
         val logs: String?,
         val failed: Boolean,
-        val startedAt: Date,
-        val endedAt: Date
+        val startedAt: String,
+        val endedAt: String
     )
 }

@@ -42,7 +42,10 @@ class DeviceTest(
         if (event!!.eventType == SerialPort.LISTENING_EVENT_DATA_RECEIVED) {
             val newData = event.receivedData
             val s: String = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(newData)).toString()
-            serialLog.add(s)
+                .replace("[^a-zA-Z0-9_\\-\\[\\]()*., \n:]".toRegex(), "*")
+            synchronized(serialLog) {
+                serialLog.add(s)
+            }
         } else if (event.eventType == SerialPort.LISTENING_EVENT_PORT_DISCONNECTED) {
             serialDisconnected = true // Mark as disconnected, it will be checked and erred by the test
         }
