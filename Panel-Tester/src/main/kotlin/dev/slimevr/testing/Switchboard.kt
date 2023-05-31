@@ -30,8 +30,8 @@ class Switchboard(
 
     private var batteryEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(5).provider("pigpio-digital-output").build()
     private var vbusEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(6).provider("pigpio-digital-output").build()
-    private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.HIGH).initial(DigitalState.HIGH).address(13).provider("pigpio-digital-output").build()
-    private var flashPin = DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.HIGH).initial(DigitalState.HIGH).address(19).provider("pigpio-digital-output").build()
+    private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.LOW).initial(DigitalState.LOW).address(13).provider("pigpio-digital-output").build()
+    private var flashPin = DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.LOW).initial(DigitalState.LOW).address(19).provider("pigpio-digital-output").build()
 
     private var ledPins = arrayOf(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).initial(defaultLedState).address(18).provider("pigpio-digital-output").build(),
@@ -52,17 +52,17 @@ class Switchboard(
 
     fun resetMode(mode: Boolean) {
         if (mode) {
-            rstPin.low()
-        } else {
             rstPin.high()
+        } else {
+            rstPin.low()
         }
     }
 
     fun flashMode(mode: Boolean) {
         if (mode) {
-            flashPin.low()
-        } else {
             flashPin.high()
+        } else {
+            flashPin.low()
         }
     }
 

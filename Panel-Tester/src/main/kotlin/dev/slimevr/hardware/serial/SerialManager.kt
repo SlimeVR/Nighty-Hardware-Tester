@@ -13,6 +13,7 @@ class SerialManager {
 
     fun openPort(port: SerialPort, listener: SerialPortMessageListener): Boolean {
         if(port.openPort(200)) {
+            port.setBaudRate(115200)
             port.addDataListener(listener)
             return true
         }

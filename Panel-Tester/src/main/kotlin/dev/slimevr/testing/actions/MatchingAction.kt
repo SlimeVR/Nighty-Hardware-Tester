@@ -6,14 +6,9 @@ import java.util.regex.Pattern
 
 open class MatchingAction(
     protected val testName: String,
-    successPatterns: Array<String>,
-    failurePatterns: Array<String>
+    protected val successPatterns: Array<Pattern>,
+    protected val failurePatterns: Array<Pattern>
 ): TestAction<String> {
-
-    protected val successPatterns: Array<Pattern> = successPatterns
-        .map { it.toPattern(Pattern.CASE_INSENSITIVE) }.toTypedArray()
-    protected val failurePatterns: Array<Pattern> = failurePatterns
-        .map { it.toPattern(Pattern.CASE_INSENSITIVE) }.toTypedArray()
 
     override fun action(testedValue: String, log: String, startTime: Long): dev.slimevr.testing.TestResult {
         val res = matchString(testedValue)

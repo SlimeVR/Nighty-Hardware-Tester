@@ -20,6 +20,7 @@ class LabelLogHandler(
         }
     }
 
+    @Synchronized
     private fun addLines(lines: List<String>) {
         while(allLines.size + lines.size > maxLines) {
             allLines.removeAt(0)
@@ -28,6 +29,7 @@ class LabelLogHandler(
         updatePanel()
     }
 
+    @Synchronized
     fun clear() {
         allLines.clear()
         updatePanel()

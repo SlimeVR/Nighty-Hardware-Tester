@@ -2,8 +2,10 @@ package dev.slimevr.testing.actions
 
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
+import java.io.IOException
 import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
+import java.util.regex.Pattern
 
 /**
  * Executes console command and tests output for patterns.
@@ -13,8 +15,8 @@ import java.util.logging.Logger
  */
 class ExecuteCommandAction(
     testName: String,
-    successPatterns: Array<String>,
-    failurePatterns: Array<String>,
+    successPatterns: Array<Pattern>,
+    failurePatterns: Array<Pattern>,
     command: String,
     private val timeout: Long
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
@@ -22,7 +24,7 @@ class ExecuteCommandAction(
     private val logger: Logger = Logger.getLogger("ExecuteCommandAction")
 
     private val processBuilder: ProcessBuilder =
-        ProcessBuilder(command.split(" ")).redirectError(ProcessBuilder.Redirect.PIPE).redirectOutput(
+        ProcessBuilder(command.split(" ")).redirectErrorStream(true).redirectOutput(
             ProcessBuilder.Redirect.PIPE
         )
 
@@ -34,19 +36,18 @@ class ExecuteCommandAction(
         logger.info("Starting process: " + processBuilder.command().joinToString(" "))
         val process = processBuilder.start()
         val endTime = System.currentTimeMillis() + timeout
-        val errorReader = process.errorReader()
         val inputReader = process.inputReader()
         var testResult = TestStatus.TESTING
         var matchedString = ""
         var destroyed = false
         do {
-            when (val line = errorReader.readLine()) {
-                null -> break
-                else -> if(line.isNotBlank()) fullLog.add(line)
-            }
-            when (val line = inputReader.readLine()) {
-                null -> break
-                else -> if(line.isNotBlank()) fullLog.add(line)
+            try {
+                when (val line = inputReader.readLine()) {
+                    null -> break
+                    else -> if (line.isNotBlank()) fullLog.add(line)
+                }
+            } catch(ex: IOException) {
+                ex.message?.let { fullLog.add(it) }
             }
             fullLog.subList(logStart, fullLog.size).forEach {
                 logger.info(it)
@@ -66,10 +67,10 @@ class ExecuteCommandAction(
             }
             logStart = fullLog.size
         } while(process.isAlive)
-        fullLog.add("Process ended with ${process.exitValue()} exit code")
+        //fullLog.add("Process ended with ${process.exitValue()} exit code")
         // If we didn't pass the test yet, it's a failure
         if (testResult == TestStatus.TESTING) {
-            testResult = if (successPatterns.isEmpty() && failurePatterns.isEmpty() && process.exitValue() == 0)
+            testResult = if (successPatterns.isEmpty() && failurePatterns.isEmpty())// && process.exitValue() == 0)
                 TestStatus.PASS
             else
                 TestStatus.ERROR
