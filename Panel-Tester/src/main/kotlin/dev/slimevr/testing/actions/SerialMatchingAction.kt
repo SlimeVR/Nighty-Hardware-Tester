@@ -4,6 +4,7 @@ import dev.slimevr.testing.DeviceTest
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
 import java.lang.Thread.sleep
+import java.util.logging.Logger
 import java.util.regex.Pattern
 
 class SerialMatchingAction(
@@ -14,6 +15,8 @@ class SerialMatchingAction(
     private val timeout: Long
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
 
+    var logger: Logger = Logger.getLogger("Serial Matching Action")
+
     override fun action(testedValue: String, log: String, startTime: Long): TestResult {
         val serialLogStart = device.serialLogRead
         while (timeout < 0 || startTime + timeout > System.currentTimeMillis()) {
@@ -22,7 +25,8 @@ class SerialMatchingAction(
                     if (serialLog.size > serialLogRead) {
                         serialLog.subList(serialLogRead, serialLog.size).forEachIndexed { index, s ->
                             val result = matchString(s)
-                            if (result.isMatched()) {
+                            logger.info("$s: $result")
+                            if (result != MatchResult.NOT_FOUND) {
                                 serialLogRead += index + 1
                                 return TestResult(
                                     testName,

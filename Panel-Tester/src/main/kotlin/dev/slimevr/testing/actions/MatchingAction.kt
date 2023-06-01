@@ -2,6 +2,7 @@ package dev.slimevr.testing.actions
 
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
+import java.util.logging.Logger
 import java.util.regex.Pattern
 
 open class MatchingAction(
@@ -18,12 +19,19 @@ open class MatchingAction(
 
     fun matchString(string: String): MatchResult {
         for(pattern in failurePatterns) {
-            if(pattern.matcher(string).matches())
-                return MatchResult.FAILURE
+            with(pattern.matcher(string)) {
+                Logger.getLogger("matcher").fine(this.toString())
+                if(matches())
+                    return MatchResult.FAILURE
+            }
+
         }
         for(pattern in successPatterns) {
-            if(pattern.matcher(string).matches())
-                return MatchResult.SUCCESS
+            with(pattern.matcher(string)) {
+                Logger.getLogger("matcher").fine(this.toString())
+                if(matches())
+                    return MatchResult.SUCCESS
+            }
         }
         return MatchResult.NOT_FOUND
     }

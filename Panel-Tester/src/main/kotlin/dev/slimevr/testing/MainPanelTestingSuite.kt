@@ -67,20 +67,20 @@ class MainPanelTestingSuite(
                 return
             }
             try {
-                testVBUSVoltages()
-                testBATVoltages()
+                //testVBUSVoltages()
+                //testBATVoltages()
                 if (enumerateSerialDevices()) {
                     // At this stage all devices should be enabled and only reboot via pins is allowed
                     readDeviceIDs()
                     // TODO Add check if flashing required
-                    flashDevices()
-                    //openSerialPorts()
-                    //reboot()
-                    //testI2C()
-                    //testIMU()
+                    //flashDevices()
+                    openSerialPorts()
+                    reboot()
+                    testI2C()
+                    testIMU()
                 }
                 checkTestResults()
-                commitTestResults()
+                //commitTestResults()
                 reportTestResults()
                 testEnd()
             } catch(exception: Throwable) {
@@ -106,19 +106,19 @@ class MainPanelTestingSuite(
         statusLogger.info("Testing I2C...")
         logger.info("Rebooting all devices...")
         reboot()
-        logger.log(Level.INFO, "Press button to continue")
-        while (!switchboard.isButtonPressed()) {
-            sleep(10)
-        }
         for (device in deviceTests) {
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
                 val testI2C = SerialMatchingAction(
                     "Test I2C",
-                    arrayOf(".*\\[INFO ] \\[BNO080Sensor:0] Connected to BNO085 on 0x4a.*".toPattern(Pattern.CASE_INSENSITIVE)),
-                    arrayOf(".*ERR.*".toPattern(Pattern.CASE_INSENSITIVE),
-                        ".*FATAL.*".toPattern(Pattern.CASE_INSENSITIVE)),
+                    arrayOf(
+                        """\[INFO ] \[BNO080Sensor:0] Connected to BNO085 on 0x4a""".toPattern()
+                    ),
+                    arrayOf(
+                        "ERR".toPattern(),
+                        "FATAL".toPattern()
+                    ),
                     device,
                     15000
                 )
