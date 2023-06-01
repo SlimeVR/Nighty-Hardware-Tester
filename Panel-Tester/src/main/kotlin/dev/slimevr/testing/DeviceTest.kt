@@ -3,9 +3,12 @@ package dev.slimevr.testing
 import com.fazecast.jSerialComm.SerialPort
 import com.fazecast.jSerialComm.SerialPortEvent
 import com.fazecast.jSerialComm.SerialPortMessageListener
+import java.io.OutputStream
+import java.io.OutputStreamWriter
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.*
+
 
 class DeviceTest(
     var deviceNum: Int
@@ -38,16 +41,36 @@ class DeviceTest(
         endTime = System.currentTimeMillis()
     }
 
+    fun sendSerialCommand(command: String): Boolean {
+        if(serialPort == null)
+            return false
+        with(serialPort!!) {
+            val os: OutputStream = outputStream
+            val writer = OutputStreamWriter(os)
+            try {
+                writer.append(command).append("\"\n")
+                writer.flush()
+                serialLog.add("-> $command")
+            } catch (e: Throwable) {
+                e.printStackTrace()
+                return false
+            }
+        }
+        return true
+    }
+
     override fun serialEvent(event: SerialPortEvent?) {
         if (event!!.eventType == SerialPort.LISTENING_EVENT_DATA_RECEIVED) {
             val newData = event.receivedData
-            val s: String = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(newData)).toString()
-                .replace("[^a-zA-Z0-9_\\-\\[\\]()*., \n:]".toRegex(), "*")
+            val lines = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(newData)).toString()
+                .replace("[^a-zA-Z0-9_\\-\\[\\]()*., \n:]".toRegex(), "*").split('\n')
             synchronized(serialLog) {
-                serialLog.add(s)
+                serialLog.addAll(lines.filter { s -> s.isNotBlank() })
             }
         } else if (event.eventType == SerialPort.LISTENING_EVENT_PORT_DISCONNECTED) {
-            serialDisconnected = true // Mark as disconnected, it will be checked and erred by the test
+            synchronized(serialLog) {
+                serialDisconnected = true // Mark as disconnected, it will be checked and erred by the test
+            }
         }
     }
 

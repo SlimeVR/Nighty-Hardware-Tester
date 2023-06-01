@@ -48,7 +48,7 @@ class ExecuteCommandAction(
                 ex.message?.let { fullLog.add(it) }
             }
             fullLog.subList(logStart, fullLog.size).forEach {
-                logger.info(it)
+                //logger.info(it)
                 val result = matchString(it)
                 if ((result == MatchResult.SUCCESS) && (testResult != TestStatus.ERROR)) {
                     matchedString = it

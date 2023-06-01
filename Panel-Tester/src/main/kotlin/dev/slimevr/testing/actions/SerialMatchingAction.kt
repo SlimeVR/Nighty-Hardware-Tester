@@ -21,10 +21,20 @@ class SerialMatchingAction(
         while (timeout < 0 || startTime + timeout > System.currentTimeMillis()) {
             with(device) {
                 synchronized(serialLog) {
+                    if (serialDisconnected) {
+                        return TestResult(
+                            testName,
+                            TestStatus.ERROR,
+                            startTime,
+                            System.currentTimeMillis(),
+                            "Serial disconnected",
+                            serialLog.subList(serialLogStart, serialLogRead).joinToString("\n")
+                        )
+                    }
                     if (serialLog.size > serialLogRead) {
                         serialLog.subList(serialLogRead, serialLog.size).forEachIndexed { index, s ->
                             val result = matchString(s)
-                            logger.info("$s: $result")
+                            //logger.info("$s: $result")
                             if (result != MatchResult.NOT_FOUND) {
                                 serialLogRead += index + 1
                                 return TestResult(

@@ -18,7 +18,7 @@ class MainPanelTestingSuite(
     private var statusLogger: Logger
 ) : Thread("Testing suit thread") {
 
-    private val powerBalanceTimeMS = 100L
+    private val powerBalanceTimeMS = 150L
     private val flashResetPinsMS = 1000L
     private var serialBootTimeMS = 1500L
     private val bootTimeMS = 1500L
@@ -42,6 +42,7 @@ class MainPanelTestingSuite(
 
     private val serialFound = SuccessAction("Find serial port")
     private val serialOpened = SuccessAction("Open serial port")
+    private val testIMUCommandFailed = SuccessAction("Test IMU")
 
     private val firmwareFile = "/home/pi/slimevr-tracker-esp/.pio/build/esp12e/firmware.bin"
 
@@ -66,13 +67,13 @@ class MainPanelTestingSuite(
                 return
             }
             try {
-                //testVBUSVoltages()
-                //testBATVoltages()
+                testVBUSVoltages()
+                testBATVoltages()
                 if (enumerateSerialDevices()) {
                     // At this stage all devices should be enabled and only reboot via pins is allowed
                     readDeviceIDs()
                     // TODO Add check if flashing required
-                    //flashDevices()
+                    flashDevices()
                     openSerialPorts()
                     reboot()
                     testI2C()
@@ -106,6 +107,7 @@ class MainPanelTestingSuite(
         logger.info("Rebooting all devices...")
         reboot()
         for (device in deviceTests) {
+            val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
@@ -121,7 +123,7 @@ class MainPanelTestingSuite(
                     device,
                     15000
                 )
-                val result = testI2C.action("", "", System.currentTimeMillis())
+                val result = testI2C.action("", "", startTime)
                 addResult(device, result)
             }
         }
@@ -130,20 +132,27 @@ class MainPanelTestingSuite(
     private fun testIMU() {
         statusLogger.info("Testing IMU...")
         for (device in deviceTests) {
+            val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
-                val testIMU = SerialMatchingAction(
-                    "Test IMU",
-                    arrayOf(""".*Sensor 1 sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
-                    arrayOf(".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
-                        ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
-                        ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)),
-                    device,
-                    15000
-                )
-                val result = testIMU.action("", "", System.currentTimeMillis())
-                addResult(device, result)
+                if(!device.sendSerialCommand("GET TEST")) {
+                    val result = testIMUCommandFailed.action(false, "Serial command error", startTime)
+                } else {
+                    val testIMU = SerialMatchingAction(
+                        "Test IMU",
+                        arrayOf(""".*Sensor 1 sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
+                        arrayOf(
+                            ".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
+                            ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
+                            ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)
+                        ),
+                        device,
+                        15000
+                    )
+                    val result = testIMU.action("", "", startTime)
+                    addResult(device, result)
+                }
             }
         }
     }
@@ -193,6 +202,7 @@ class MainPanelTestingSuite(
         statusLogger.info("Flashing devices...")
         val flashThreads = mutableListOf<Thread>()
         for (device in deviceTests) {
+            val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else if (!flashingRequired[device.deviceNum]) {
@@ -202,7 +212,7 @@ class MainPanelTestingSuite(
                     val flashAction = ExecuteCommandAction(
                         // TODO HANDLE ERRORS AND SUCCESS
                         "Flash firmware", arrayOf(
-                            ".*Staying in bootloader.*".toRegex(RegexOption.IGNORE_CASE)
+                            ".*Hash of data verified.*".toRegex(RegexOption.IGNORE_CASE)
                         ), arrayOf(
                             ".*Errno.*".toRegex(RegexOption.IGNORE_CASE),
                             ".*error.*".toRegex(RegexOption.IGNORE_CASE)
@@ -212,7 +222,7 @@ class MainPanelTestingSuite(
                             + "--port ${device.serialPort!!.systemPortPath} "
                             + "--baud 921600 write_flash -fm qio 0x0000 $firmwareFile", -1
                     )
-                    val flashResult = flashAction.action("", "", System.currentTimeMillis())
+                    val flashResult = flashAction.action("", "", startTime)
                     addResult(device, flashResult)
                 })
             }
@@ -231,6 +241,7 @@ class MainPanelTestingSuite(
         // */
         statusLogger.info("Reading MAC addresses...")
         for (device in deviceTests) {
+            val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
@@ -238,7 +249,7 @@ class MainPanelTestingSuite(
                     "Read MAC address", arrayOf(".*MAC: .*".toRegex(RegexOption.IGNORE_CASE)), emptyArray(),
                     "esptool --before no_reset --after no_reset --port ${device.serialPort!!.systemPortPath} read_mac", 20000
                 )
-                val macResult = macAction.action("", "", System.currentTimeMillis())
+                val macResult = macAction.action("", "", startTime)
                 addResult(device, macResult)
                 if (macResult.status == TestStatus.PASS) {
                     device.deviceId = macResult.endValue.substring(5)
@@ -266,10 +277,10 @@ class MainPanelTestingSuite(
         statusLogger.info("Searching for serial devices...")
         var foundSerials = 0
         for (device in deviceTests) {
+            val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to power error")
             } else {
-                val testStart = System.currentTimeMillis()
                 switchboard.enableDevice(device.deviceNum)
                 for (i in 1..3) {
                     sleep(serialBootTimeMS)
@@ -284,7 +295,7 @@ class MainPanelTestingSuite(
                             logger.severe("${it.portDescription} : ${it.descriptivePortName} : ${it.systemPortPath} : ${it.portLocation}")
                         }
                         for (device in deviceTests) {
-                            device.addTestResult(serialFound.action(false, "More than one serial port found: ${newPorts.joinToString { p -> p.descriptivePortName + " " + p.systemPortPath }}", testStart))
+                            device.addTestResult(serialFound.action(false, "More than one serial port found: ${newPorts.joinToString { p -> p.descriptivePortName + " " + p.systemPortPath }}", startTime))
                         }
                         return false
                     } else if (newPorts.size == 1) {
@@ -297,11 +308,11 @@ class MainPanelTestingSuite(
                     }
                 }
                 if (device.serialPort == null) {
-                    val connectTest = serialFound.action(false, "No serial ports found", testStart)
+                    val connectTest = serialFound.action(false, "No serial ports found", startTime)
                     addResult(device, connectTest)
                     continue
                 } else {
-                    val connectTest = serialFound.action(true, "Serial port found: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}", testStart)
+                    val connectTest = serialFound.action(true, "Serial port found: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}", startTime)
                     addResult(device, connectTest)
                     foundSerials++
                     // DEBUG

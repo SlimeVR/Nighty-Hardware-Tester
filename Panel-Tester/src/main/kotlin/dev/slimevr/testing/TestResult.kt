@@ -9,6 +9,6 @@ data class TestResult(
     var log: String
 ) {
     override fun toString(): String {
-        return "$testName: $endValue (${status.name}): $log"
+        return "$testName: $endValue (${status.name})"
     }
 }
