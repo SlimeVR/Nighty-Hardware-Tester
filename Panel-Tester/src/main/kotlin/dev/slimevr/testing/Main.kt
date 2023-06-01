@@ -40,7 +40,7 @@ fun main(args: Array<String>) {
 
     val switchboard = Switchboard(pi4j)
     var adcProvider = ADCProvider(i2CProvider)
-    var database = RemoteTestingDatabase("https://slimevr-hardware-tester.devminer.xyz/api/rpc", "s&gggdZTcJGpwz&75caLU4AUF8M*kuR#", "slime-tester-1", "mainboard panel")
+    var database = RemoteTestingDatabase(System.getenv("TESTER_RPC_URL"), System.getenv("TESTER_RPC_PASSWORD"), "slime-tester-1", System.getenv("TESTER_REPORT_TYPE"))
     //sleep(10000)
     MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10, globalLogger, statusLogger).start()
 }

@@ -66,45 +66,21 @@ class MainPanelTestingSuite(
                 logger.log(Level.SEVERE, "Standby error, can't continue", exception)
                 return
             }
-            /*
-            switchboard.powerOff()
-            switchboard.disableAll()
-            logger.log(Level.INFO, "Enabling all devices")
-            deviceTests.forEach {
-                switchboard.enableDevice(it.deviceNum)
-            }
-            logger.log(Level.INFO, "VBUS Power on")
-            switchboard.powerVbus()
-            sleep(2000)
-            logger.log(Level.INFO, "Flashing...")
-            flash()
-            while (!switchboard.isButtonPressed()) {
-                sleep(10)
-            }
-            logger.log(Level.INFO, "BAT Power on")
-            switchboard.powerOff()
-            switchboard.powerBattery()
-            sleep(2000)
-            while (!switchboard.isButtonPressed()) {
-                sleep(10)
-            }
-            // */
             try {
                 testVBUSVoltages()
                 testBATVoltages()
                 if (enumerateSerialDevices()) {
                     // At this stage all devices should be enabled and only reboot via pins is allowed
                     readDeviceIDs()
+                    // TODO Add check if flashing required
+                    flashDevices()
+                    //openSerialPorts()
+                    //reboot()
+                    //testI2C()
+                    //testIMU()
                 }
-                // TODO Add check if flashing required
-                flashDevices()
-                openSerialPorts()
-                reboot()
-                testI2C()
-                testIMU()
-                // */
                 checkTestResults()
-                //commitTestResults()
+                commitTestResults()
                 reportTestResults()
                 testEnd()
             } catch(exception: Throwable) {
@@ -296,7 +272,7 @@ class MainPanelTestingSuite(
             } else {
                 val testStart = System.currentTimeMillis()
                 switchboard.enableDevice(device.deviceNum)
-                for (i in 1..1) {
+                for (i in 1..3) {
                     sleep(serialBootTimeMS)
                     val newPorts = serialManager.findNewPorts()
                     if (newPorts.size > 1) {
