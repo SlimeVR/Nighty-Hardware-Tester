@@ -1,6 +1,5 @@
 package dev.slimevr.testing
 
-import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.actions.*
@@ -113,11 +112,11 @@ class MainPanelTestingSuite(
                 val testI2C = SerialMatchingAction(
                     "Test I2C",
                     arrayOf(
-                        """\[INFO ] \[BNO080Sensor:0] Connected to BNO085 on 0x4a""".toPattern()
+                        """\[INFO ] \[BNO080Sensor:0] Connected to BNO085 on 0x4a""".toRegex()
                     ),
                     arrayOf(
-                        "ERR".toPattern(),
-                        "FATAL".toPattern()
+                        "ERR".toRegex(),
+                        "FATAL".toRegex()
                     ),
                     device,
                     15000
@@ -136,10 +135,10 @@ class MainPanelTestingSuite(
             } else {
                 val testIMU = SerialMatchingAction(
                     "Test IMU",
-                    arrayOf(".*Sensor 1 sent some data, looks working\\..*".toPattern(Pattern.CASE_INSENSITIVE)),
-                    arrayOf(".*Sensor 1 didn't send any data yet!.*".toPattern(Pattern.CASE_INSENSITIVE),
-                        ".*ERR.*".toPattern(Pattern.CASE_INSENSITIVE),
-                        ".*FATAL.*".toPattern(Pattern.CASE_INSENSITIVE)),
+                    arrayOf(""".*Sensor 1 sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
+                    arrayOf(".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
+                        ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
+                        ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)),
                     device,
                     15000
                 )
@@ -203,10 +202,10 @@ class MainPanelTestingSuite(
                     val flashAction = ExecuteCommandAction(
                         // TODO HANDLE ERRORS AND SUCCESS
                         "Flash firmware", arrayOf(
-                            ".*Staying in bootloader.*".toPattern(Pattern.CASE_INSENSITIVE)
+                            ".*Staying in bootloader.*".toRegex(RegexOption.IGNORE_CASE)
                         ), arrayOf(
-                            ".*Errno.*".toPattern(Pattern.CASE_INSENSITIVE),
-                            ".*error.*".toPattern(Pattern.CASE_INSENSITIVE)
+                            ".*Errno.*".toRegex(RegexOption.IGNORE_CASE),
+                            ".*error.*".toRegex(RegexOption.IGNORE_CASE)
                         ),
                         "/usr/bin/python3 /home/pi/.platformio/packages/tool-esptoolpy/esptool.py "
                             + "--before no_reset --after no_reset --chip esp8266 "
@@ -236,7 +235,7 @@ class MainPanelTestingSuite(
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
                 val macAction = ExecuteCommandAction(
-                    "Read MAC address", arrayOf(".*MAC: .*".toPattern(Pattern.CASE_INSENSITIVE)), emptyArray(),
+                    "Read MAC address", arrayOf(".*MAC: .*".toRegex(RegexOption.IGNORE_CASE)), emptyArray(),
                     "esptool --before no_reset --after no_reset --port ${device.serialPort!!.systemPortPath} read_mac", 20000
                 )
                 val macResult = macAction.action("", "", System.currentTimeMillis())

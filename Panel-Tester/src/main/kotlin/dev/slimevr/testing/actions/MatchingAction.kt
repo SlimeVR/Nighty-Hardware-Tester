@@ -3,12 +3,11 @@ package dev.slimevr.testing.actions
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
 import java.util.logging.Logger
-import java.util.regex.Pattern
 
 open class MatchingAction(
     protected val testName: String,
-    protected val successPatterns: Array<Pattern>,
-    protected val failurePatterns: Array<Pattern>
+    protected val successPatterns: Array<Regex>,
+    protected val failurePatterns: Array<Regex>
 ): TestAction<String> {
 
     override fun action(testedValue: String, log: String, startTime: Long): dev.slimevr.testing.TestResult {
@@ -18,20 +17,14 @@ open class MatchingAction(
     }
 
     fun matchString(string: String): MatchResult {
+        Logger.getLogger("matcher").fine(string)
         for(pattern in failurePatterns) {
-            with(pattern.matcher(string)) {
-                Logger.getLogger("matcher").fine(this.toString())
-                if(matches())
-                    return MatchResult.FAILURE
-            }
-
+            Logger.getLogger("matcher").fine(pattern.toString())
+            if(string.contains(pattern)) return MatchResult.FAILURE
         }
         for(pattern in successPatterns) {
-            with(pattern.matcher(string)) {
-                Logger.getLogger("matcher").fine(this.toString())
-                if(matches())
-                    return MatchResult.SUCCESS
-            }
+            Logger.getLogger("matcher").fine(pattern.toString())
+            if(string.contains(pattern)) return MatchResult.SUCCESS
         }
         return MatchResult.NOT_FOUND
     }

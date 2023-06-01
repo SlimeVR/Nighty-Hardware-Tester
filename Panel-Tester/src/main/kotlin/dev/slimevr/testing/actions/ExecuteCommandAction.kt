@@ -3,9 +3,7 @@ package dev.slimevr.testing.actions
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
 import java.io.IOException
-import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
-import java.util.regex.Pattern
 
 /**
  * Executes console command and tests output for patterns.
@@ -15,8 +13,8 @@ import java.util.regex.Pattern
  */
 class ExecuteCommandAction(
     testName: String,
-    successPatterns: Array<Pattern>,
-    failurePatterns: Array<Pattern>,
+    successPatterns: Array<Regex>,
+    failurePatterns: Array<Regex>,
     command: String,
     private val timeout: Long
 ) : MatchingAction(testName, successPatterns, failurePatterns) {

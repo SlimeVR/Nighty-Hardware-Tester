@@ -5,12 +5,11 @@ import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
 import java.lang.Thread.sleep
 import java.util.logging.Logger
-import java.util.regex.Pattern
 
 class SerialMatchingAction(
     testName: String,
-    successPatterns: Array<Pattern>,
-    failurePatterns: Array<Pattern>,
+    successPatterns: Array<Regex>,
+    failurePatterns: Array<Regex>,
     private val device: DeviceTest,
     private val timeout: Long
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
