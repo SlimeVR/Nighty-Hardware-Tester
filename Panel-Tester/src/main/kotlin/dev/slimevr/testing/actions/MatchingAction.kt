@@ -36,7 +36,7 @@ open class MatchingAction(
         NOT_FOUND;
 
         fun isSuccess() = this == SUCCESS
- 
+
         fun isFailure() = this == FAILURE
 
         fun isMatched() = this != NOT_FOUND

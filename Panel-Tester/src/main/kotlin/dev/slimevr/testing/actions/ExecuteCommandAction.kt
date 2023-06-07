@@ -54,11 +54,13 @@ class ExecuteCommandAction(
                     matchedString = it
                     testResult = TestStatus.PASS
                 } else if (result == MatchResult.FAILURE) {
+                    matchedString = it
                     testResult = TestStatus.ERROR
                 }
             }
             if (!destroyed && timeout > 0 && endTime < System.currentTimeMillis()) {
                 process.destroyForcibly()
+                matchedString = "Timeout ${timeout / 1000}s"
                 fullLog.add("Forcibly destroying process after ${timeout / 1000}s")
                 testResult = TestStatus.ERROR
                 destroyed = true

@@ -18,7 +18,8 @@ class SerialMatchingAction(
 
     override fun action(testedValue: String, log: String, startTime: Long): TestResult {
         val serialLogStart = device.serialLogRead
-        while (timeout < 0 || startTime + timeout > System.currentTimeMillis()) {
+        val timeoutTo = System.currentTimeMillis() + timeout
+        while (timeout < 0 || timeoutTo > System.currentTimeMillis()) {
             with(device) {
                 synchronized(serialLog) {
                     if (serialDisconnected) {
@@ -34,7 +35,6 @@ class SerialMatchingAction(
                     if (serialLog.size > serialLogRead) {
                         serialLog.subList(serialLogRead, serialLog.size).forEachIndexed { index, s ->
                             val result = matchString(s)
-                            //logger.info("$s: $result")
                             if (result != MatchResult.NOT_FOUND) {
                                 serialLogRead += index + 1
                                 return TestResult(

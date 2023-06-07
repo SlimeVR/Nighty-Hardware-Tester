@@ -10,6 +10,7 @@ import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.TestStatus
+import dev.slimevr.testing.destroy
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
@@ -32,6 +33,7 @@ class TesterUI(
         val window = BasicWindow()
         window.theme = SimpleTheme(TextColor.ANSI.WHITE, TextColor.ANSI.BLACK)
         window.setHints(listOf(Window.Hint.FULL_SCREEN, Window.Hint.FIT_TERMINAL_WINDOW))
+        window.setCloseWindowWithEscape(true)
 
         // Create panel to hold components
 
@@ -84,7 +86,7 @@ class TesterUI(
         Thread {
             val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace(TextColor.ANSI.BLACK))
             gui.addWindowAndWait(window)
-            exitProcess(0)
+            destroy()
         }.start()
     }
 

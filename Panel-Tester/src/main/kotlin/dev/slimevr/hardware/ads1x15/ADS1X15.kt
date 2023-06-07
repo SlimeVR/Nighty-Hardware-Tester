@@ -175,7 +175,7 @@ class ADS1X15(
         if (_mode == ADS1X15_MODE_SINGLE)
         {
             while ( isBusy() )
-                Thread.yield()   //  wait for conversion; yield for ESP.
+                ;
         }
         else
         {

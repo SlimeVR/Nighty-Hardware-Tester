@@ -13,6 +13,7 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
+val pi4j = Pi4J.newAutoContext()
 
 fun main(args: Array<String>) {
     LogManager.initialize(File(""))
@@ -35,7 +36,6 @@ fun main(args: Array<String>) {
 
     sleep(1000)
 
-    val pi4j = Pi4J.newAutoContext()
     val i2CProvider: I2CProvider = pi4j.provider("linuxfs-i2c")
 
     val switchboard = Switchboard(pi4j)
@@ -43,4 +43,9 @@ fun main(args: Array<String>) {
     var database = RemoteTestingDatabase(System.getenv("TESTER_RPC_URL"), System.getenv("TESTER_RPC_PASSWORD"), "slime-tester-1", System.getenv("TESTER_REPORT_TYPE"))
     //sleep(10000)
     MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10, globalLogger, statusLogger).start()
+}
+
+fun destroy() {
+    pi4j.shutdown()
+    exitProcess(0)
 }

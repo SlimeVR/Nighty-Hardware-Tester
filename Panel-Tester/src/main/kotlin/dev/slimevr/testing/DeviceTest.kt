@@ -29,6 +29,7 @@ class DeviceTest(
      * at the end of the testing process
      */
     var commitDevice = false
+    var flashingReqired = true
 
     fun addTestResult(result: TestResult) {
         testsList.add(result)
@@ -48,7 +49,7 @@ class DeviceTest(
             val os: OutputStream = outputStream
             val writer = OutputStreamWriter(os)
             try {
-                writer.append(command).append("\"\n")
+                writer.append(command).append("\n")
                 writer.flush()
                 serialLog.add("-> $command")
             } catch (e: Throwable) {
@@ -63,7 +64,7 @@ class DeviceTest(
         if (event!!.eventType == SerialPort.LISTENING_EVENT_DATA_RECEIVED) {
             val newData = event.receivedData
             val lines = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(newData)).toString()
-                .replace("[^a-zA-Z0-9_\\-\\[\\]()*., \n:]".toRegex(), "*").split('\n')
+                .replace("[^a-zA-Z0-9_\\-\\[\\]()*., \n:'\"]".toRegex(), "*").split('\n')
             synchronized(serialLog) {
                 serialLog.addAll(lines.filter { s -> s.isNotBlank() })
             }
@@ -71,6 +72,13 @@ class DeviceTest(
             synchronized(serialLog) {
                 serialDisconnected = true // Mark as disconnected, it will be checked and erred by the test
             }
+        }
+    }
+
+    fun clearSerialLog() {
+        synchronized(serialLog) {
+            serialLogRead = 0
+            serialLog.clear()
         }
     }
 
