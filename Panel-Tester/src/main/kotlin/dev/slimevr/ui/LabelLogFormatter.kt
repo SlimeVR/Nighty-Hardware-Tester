@@ -35,6 +35,6 @@ class LabelLogFormatter : Formatter() {
     }
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        private val dateFormat = SimpleDateFormat("HH:mm:ss")
     }
 }

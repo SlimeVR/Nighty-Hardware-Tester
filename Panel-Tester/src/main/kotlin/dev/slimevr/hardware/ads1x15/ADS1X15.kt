@@ -134,7 +134,7 @@ class ADS1X15(
     init {
         _gain = ADS1X15_PGA_6_144V
         _mode = ADS1X15_MODE_SINGLE
-        _datarate = 4u // Middle speed
+        _datarate = 7u // High speed
     }
 
     private fun _requestADC(readmode: UInt)

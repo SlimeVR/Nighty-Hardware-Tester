@@ -12,8 +12,10 @@ class SerialManager {
     }
 
     fun openPort(port: SerialPort, listener: SerialPortMessageListener): Boolean {
-        if(port.openPort(200)) {
-            port.setBaudRate(115200)
+        port.setBaudRate(115200)
+        port.clearRTS()
+        port.clearDTR()
+        if(port.openPort(1500)) {
             port.addDataListener(listener)
             return true
         }
@@ -26,7 +28,7 @@ class SerialManager {
 
     fun closePort(port: SerialPort) {
         port.closePort()
-        knownPorts.remove(port)
+        port.removeDataListener()
     }
 
     fun closeAllPorts() {

@@ -47,5 +47,6 @@ fun main(args: Array<String>) {
 
 fun destroy() {
     pi4j.shutdown()
+    sleep(200)
     exitProcess(0)
 }

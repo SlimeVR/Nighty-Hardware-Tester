@@ -35,6 +35,7 @@ class SerialMatchingAction(
                     if (serialLog.size > serialLogRead) {
                         serialLog.subList(serialLogRead, serialLog.size).forEachIndexed { index, s ->
                             val result = matchString(s)
+                            //logger.info(s)
                             if (result != MatchResult.NOT_FOUND) {
                                 serialLogRead += index + 1
                                 return TestResult(
