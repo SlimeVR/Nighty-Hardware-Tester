@@ -34,15 +34,17 @@ fun main(args: Array<String>) {
     val statusLogger = Logger.getLogger("status")
     val testerUi = TesterUI(globalLogger, statusLogger)
 
-    sleep(1000)
+    sleep(500)
 
     val i2CProvider: I2CProvider = pi4j.provider("linuxfs-i2c")
 
     val switchboard = Switchboard(pi4j)
-    var adcProvider = ADCProvider(i2CProvider)
-    var database = RemoteTestingDatabase(System.getenv("TESTER_RPC_URL"), System.getenv("TESTER_RPC_PASSWORD"), "slime-tester-1", System.getenv("TESTER_REPORT_TYPE"))
+    val adcProvider = ADCProvider(i2CProvider)
+    val database = RemoteTestingDatabase(System.getenv("TESTER_RPC_URL"), System.getenv("TESTER_RPC_PASSWORD"), "slime-tester-1", System.getenv("TESTER_REPORT_TYPE"))
     //sleep(10000)
-    MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10, globalLogger, statusLogger).start()
+    val suite = MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10, globalLogger, statusLogger)
+    suite.start()
+    testerUi.registerTestingSuite(suite)
 }
 
 fun destroy() {

@@ -4,15 +4,17 @@ import com.googlecode.lanterna.TerminalSize
 import com.googlecode.lanterna.TextColor
 import com.googlecode.lanterna.graphics.SimpleTheme
 import com.googlecode.lanterna.gui2.*
+import com.googlecode.lanterna.input.KeyStroke
 import com.googlecode.lanterna.screen.Screen
 import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
+import dev.slimevr.testing.MainPanelTestingSuite
 import dev.slimevr.testing.TestStatus
 import dev.slimevr.testing.destroy
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
-import kotlin.system.exitProcess
 
 class TesterUI(
     globalLogger: Logger,
@@ -22,6 +24,7 @@ class TesterUI(
     val fullLogHandler: LabelLogHandler
     val statusLogHandler: LabelLogHandler
     val testedDevicesUI = mutableListOf<TestingDeviceUI>()
+    val window = BasicWindow()
 
     init {
         LogManager.removeNonFileHandlers()
@@ -30,7 +33,6 @@ class TesterUI(
         val screen: Screen = TerminalScreen(terminal)
         screen.startScreen()
         // Create window to hold the panel
-        val window = BasicWindow()
         window.theme = SimpleTheme(TextColor.ANSI.WHITE, TextColor.ANSI.BLACK)
         window.setHints(listOf(Window.Hint.FULL_SCREEN, Window.Hint.FIT_TERMINAL_WINDOW))
         window.setCloseWindowWithEscape(true)
@@ -88,6 +90,24 @@ class TesterUI(
             gui.addWindowAndWait(window)
             destroy()
         }.start()
+    }
+
+    fun registerTestingSuite(suite: MainPanelTestingSuite) {
+        window.addWindowListener(object: WindowListenerAdapter() {
+            override fun onInput(basePane: Window?, keyStroke: KeyStroke?, deliverEvent: AtomicBoolean?) {
+                //LogManager.global.info(keyStroke?.toString())
+                if(keyStroke?.character == ' ') {
+                    suite.startTest(-1)
+                } else if(keyStroke?.character?.isDigit() == true) {
+                    var device = keyStroke.character.digitToInt()
+                    if(device == 0)
+                        device = 9
+                    else
+                        device -= 1
+                    suite.startTest(device)
+                }
+            }
+        })
     }
 
     fun setStatus(device: Int, status: TestStatus) {

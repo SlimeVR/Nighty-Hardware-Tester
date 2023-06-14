@@ -19,12 +19,11 @@ class MainPanelTestingSuite(
     private var statusLogger: Logger
 ) : Thread("Testing suit thread") {
 
-    private val powerBalanceTimeMS = 1500L
+    private val powerBalanceTimeMS = 300L
     private val flashResetPinsMS = 1500L
-    private var serialBootTimeMS = 200L
+    private var serialBootTimeMS = 100L
     private val bootTimeMS = 1500L
     private val resetTimeMS = 1500L
-    private val retries = 3
     private val FIRMWARE_BUILD = 15
 
     private val serialManager = SerialManager()
@@ -47,11 +46,13 @@ class MainPanelTestingSuite(
     private val serialOpened = SuccessAction("Open serial port")
     private val testIMUCommandFailed = SuccessAction("Test IMU")
 
-    private val firmwareFile = "/home/pi/slimevr-tracker-esp/.pio/build/esp12e/firmware.bin"
+    private val firmwareFile = System.getenv("TESTER_FIRMWARE_FILE")
 
     private val deviceTests = mutableListOf<DeviceTest>()
     private var testStart = 0L
     private var committedSuccessfulDeviceIds = mutableListOf<String>()
+    private var startTest: Boolean = false
+    private var testOnlyDeviceNum = -1
 
     override fun run() {
         try {
@@ -70,28 +71,28 @@ class MainPanelTestingSuite(
                 return
             }
             try {
-                switchboard.disableAll()
-                switchboard.powerVbus()
-                for(i in 0..9)
-                    switchboard.enableDevice(i)
-                waitForButton()
-//                testVBUSVoltages()
-//                testBATVoltages()
+                testVBUSVoltages()
+                testBATVoltages()
 //                checkFirmware()
-//                if (enumerateSerialDevices()) {
-//                    readDeviceIDs()
-//                    flashDevices()
-////                    testDevices()
-//                }
-//                checkTestResults()
+                if (enumerateSerialDevices()) {
+                    readDeviceIDs()
+                    flashDevices()
+//                    testDevices()
+                }
+                checkTestResults()
 //                commitTestResults()
-//                reportTestResults()
+                reportTestResults()
                 testEnd()
             } catch(exception: Throwable) {
                 logger.log(Level.SEVERE, "Tester error", exception)
             }
-            waitTestStart()
         }
+    }
+
+    fun startTest(deviceNum: Int) {
+        // TODO one device doesn't work somewhere, maybe hardware flash/reset error
+        testOnlyDeviceNum = deviceNum
+        startTest = true
     }
 
     private fun checkFirmware() {
@@ -101,6 +102,8 @@ class MainPanelTestingSuite(
         switchboard.powerVbus()
         statusLogger.info("Checking firmware status...")
         for(device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             // TODO : Run in parallel?
             val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR) {// || device.serialPort == null) {
@@ -186,6 +189,8 @@ class MainPanelTestingSuite(
         switchboard.powerVbus()
         sleep(bootTimeMS)
         for(device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
@@ -321,6 +326,8 @@ class MainPanelTestingSuite(
         flash()
         val flashThreads = mutableListOf<Thread>()
         for (device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
@@ -353,6 +360,8 @@ class MainPanelTestingSuite(
         statusLogger.info("Reading MAC addresses...")
         flash()
         for (device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             if(device.deviceId.isNotBlank()) {
                 logger.info("[${device.deviceNum + 1}/$devices] Has firmware, loaded ${device.deviceId} address")
                 testerUi.setID(device.deviceNum, device.deviceId)
@@ -367,7 +376,7 @@ class MainPanelTestingSuite(
                         arrayOf(".*MAC: .*".toRegex(RegexOption.IGNORE_CASE)),
                         emptyArray(),
                         "esptool --before no_reset --after no_reset --port ${device.serialPort!!.systemPortPath} read_mac",
-                        10000
+                        3000
                     )
                     val macResult = macAction.action("", "", startTime)
                     addResult(device, macResult)
@@ -385,6 +394,7 @@ class MainPanelTestingSuite(
         switchboard.disableAll()
         switchboard.powerOff()
         serialManager.closeAllPorts()
+        testOnlyDeviceNum = -1
         val testEnd = System.currentTimeMillis()
         statusLogger.info("Done in ${(testEnd - testStart) / 1000}s")
         sleep(300)
@@ -398,6 +408,8 @@ class MainPanelTestingSuite(
         switchboard.powerVbus()
         var foundSerials = 0
         for (device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             val startTime = System.currentTimeMillis()
             switchboard.enableDevice(device.deviceNum)
             if(findSerialPort(device, startTime)) {
@@ -414,6 +426,8 @@ class MainPanelTestingSuite(
     private fun checkTestResults(): Boolean {
         var failed = false
         for (device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             device.endTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR) {
                 failed = true
@@ -428,6 +442,8 @@ class MainPanelTestingSuite(
 
     private fun reportTestResults() {
         for (device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             if (device.testStatus == TestStatus.ERROR) {
                 logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Test failed")
                 for (test in device.testsList) {
@@ -444,6 +460,8 @@ class MainPanelTestingSuite(
     private fun commitTestResults() {
         logger.info("Committing the test results to database...")
         for(device in deviceTests) {
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             if(device.deviceId.isBlank()) {
                 logger.info("[${device.deviceNum + 1}/$devices] Skipping, no ID")
                 continue
@@ -466,20 +484,36 @@ class MainPanelTestingSuite(
         switchboard.disableAll()
         switchboard.powerOff()
         statusLogger.info("Ready to start the test")
-        while (!switchboard.isButtonPressed()) {
+        while (!switchboard.isButtonPressed() && !startTest) {
             sleep(10)
         }
+        startTest = false
     }
 
     private fun waitForButton() {
         logger.info("=== Press the button to continue ===")
         sleep(1000)
-        while (!switchboard.isButtonPressed()) {
+        while (!switchboard.isButtonPressed() && !startTest) {
             sleep(10)
         }
+        startTest = false
     }
 
     private fun testStart() {
+        if(testOnlyDeviceNum >= 0) {
+            testerUi.setStatus(testOnlyDeviceNum, TestStatus.TESTING)
+            testerUi.setID(testOnlyDeviceNum, "")
+            if(deviceTests.size < 10) {
+                for (i in 0 until devices) {
+                    val device = DeviceTest(i)
+                    deviceTests.add(device)
+                }
+            }
+            deviceTests[testOnlyDeviceNum] = DeviceTest(testOnlyDeviceNum)
+            statusLogger.info("Retesting device ${testOnlyDeviceNum+1}")
+            testStart = System.currentTimeMillis()
+            return
+        }
         testerUi.statusLogHandler.clear()
         testerUi.clear()
         deviceTests.clear()
@@ -503,6 +537,8 @@ class MainPanelTestingSuite(
 
         for (i in 0 until devices) {
             val device = deviceTests[i]
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             statusLogger.info("[${i + 1}/$devices] Testing power from VBUS... ")
             switchboard.enableDevice(i)
             sleep(powerBalanceTimeMS)
@@ -537,6 +573,8 @@ class MainPanelTestingSuite(
 
         for (i in 0 until devices) {
             val device = deviceTests[i]
+            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                continue
             statusLogger.info("[${i + 1}/$devices] Testing power from Battery... ")
             switchboard.enableDevice(i)
             sleep(powerBalanceTimeMS)
