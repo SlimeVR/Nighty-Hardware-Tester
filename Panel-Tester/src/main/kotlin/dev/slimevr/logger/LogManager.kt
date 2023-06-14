@@ -10,7 +10,7 @@ import java.util.logging.*
 object LogManager {
     private val initialized = AtomicBoolean(false)
     var global = Logger.getLogger("")
-    var onlyFileLogger = Logger.getLogger("")
+    var onlyFileLogger = Logger.getLogger("file-logger")
 
     @Throws(SecurityException::class, IOException::class)
     fun initialize(mainLogDir: File) {
@@ -49,6 +49,6 @@ object LogManager {
 
     init {
         //System.setOut(PrintStream(LoggerOutputStream(global, Level.INFO), true))
-        System.setErr(PrintStream(LoggerOutputStream(global, Level.SEVERE), true))
+        //System.setErr(PrintStream(LoggerOutputStream(global, Level.SEVERE), true))
     }
 }

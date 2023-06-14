@@ -4,6 +4,8 @@ import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.actions.*
 import dev.slimevr.ui.TesterUI
+import java.io.FileReader
+import java.io.FileWriter
 import java.io.IOException
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -19,11 +21,11 @@ class MainPanelTestingSuite(
     private var statusLogger: Logger
 ) : Thread("Testing suit thread") {
 
-    private val powerBalanceTimeMS = 300L
-    private val flashResetPinsMS = 1500L
-    private var serialBootTimeMS = 100L
+    private val powerBalanceTimeMS = 100L
+    private val flashResetPinsMS = 300L
+    private var serialBootTimeMS = 200L
     private val bootTimeMS = 1500L
-    private val resetTimeMS = 1500L
+    private val resetTimeMS = 300L
     private val FIRMWARE_BUILD = 15
 
     private val serialManager = SerialManager()
@@ -38,7 +40,7 @@ class MainPanelTestingSuite(
     private val actionTestBAT_REF = VoltageTestAction("Bat reference", 4.6f, 5.3f)
     private val actionTestBAT_VCC = VoltageTestAction("VCC voltage from Bat power", 3.3f, 5.3f)
     private val actionTestBAT_3v3 = VoltageTestAction("3v3 voltage from Bat power", 2.9f, 3.5f)
-    private val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -0.5f, 0.5f)
+    private val actionTestBAT_VBUS = VoltageTestAction("VBUS voltage from Bat power", -0.5f, 0.7f)
     private val actionTestBAT_CHRG = VoltageTestAction("Chrg LED voltage from Bat power", -1.0f, 1f)
     private val actionTestBAT_FULL = VoltageTestAction("Full LED voltage from Bat power", -1.0f, 1f)
 
@@ -55,6 +57,17 @@ class MainPanelTestingSuite(
     private var testOnlyDeviceNum = -1
 
     override fun run() {
+        try {
+            val fw = FileReader("testedBoards.txt")
+            fw.forEachLine {
+                committedSuccessfulDeviceIds.add(it)
+                if (committedSuccessfulDeviceIds.size > 30)
+                    committedSuccessfulDeviceIds.removeAt(0)
+            }
+            logger.info("Loaded ${committedSuccessfulDeviceIds.size} old boards")
+        } catch (ex: IOException) {
+            logger.info("Old boards not loaded (${ex.message})")
+        }
         try {
             selfTest()
         } catch(exception: Throwable) {
@@ -80,7 +93,7 @@ class MainPanelTestingSuite(
 //                    testDevices()
                 }
                 checkTestResults()
-//                commitTestResults()
+                commitTestResults()
                 reportTestResults()
                 testEnd()
             } catch(exception: Throwable) {
@@ -110,8 +123,7 @@ class MainPanelTestingSuite(
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
                 statusLogger.info("[${device.deviceNum + 1}/$devices] Fetching data...")
-                switchboard.enableDevice(device.deviceNum)
-                if(findSerialPort(device, startTime)) {
+                if(findSerialPort(device, startTime, true)) {
                     //for (i in 1..5) {
                         if (serialManager.openPort(device.serialPort!!, device)) {
                             statusLogger.info("[${device.deviceNum + 1}/$devices] Port ${device.serialPort!!.systemPortPath} open")
@@ -196,9 +208,7 @@ class MainPanelTestingSuite(
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
                 statusLogger.info("[${device.deviceNum + 1}/$devices] Testing ${device.deviceId}")
-                switchboard.enableDevice(device.deviceNum)
-                sleep(serialBootTimeMS)
-                if(findSerialPort(device, startTime)) {
+                if(findSerialPort(device, startTime, true)) {
                     // todo open
                     testI2C(device)
                     testIMU(device)
@@ -259,11 +269,13 @@ class MainPanelTestingSuite(
         }
     }
 
-    private fun findSerialPort(device: DeviceTest, startTime: Long): Boolean {
+    private fun findSerialPort(device: DeviceTest, startTime: Long, enable: Boolean): Boolean {
         if (device.testStatus == TestStatus.ERROR) {
             logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             return false
         } else {
+            if(enable)
+                switchboard.enableDevice(device.deviceNum)
             for (i in 1..10) {
                 sleep(serialBootTimeMS)
                 val newPorts = serialManager.findNewPorts()
@@ -335,6 +347,7 @@ class MainPanelTestingSuite(
                 logger.info("[${device.deviceNum + 1}/$devices] Skipping already flashed device")
             } else {
                 flashThreads.add(Thread {
+                    statusLogger.info("[${device.deviceNum + 1}/$devices] Flashing...")
                     val flashAction = ExecuteCommandAction(
                         "Flash firmware", arrayOf(
                             ".*Hash of data verified.*".toRegex(RegexOption.IGNORE_CASE)
@@ -371,12 +384,13 @@ class MainPanelTestingSuite(
                 if (device.testStatus == TestStatus.ERROR || device.serialPort == null) {
                     logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
                 } else {
+                    statusLogger.info("[${device.deviceNum + 1}/$devices] Reading MAC address")
                     val macAction = ExecuteCommandAction(
                         "Read MAC address",
                         arrayOf(".*MAC: .*".toRegex(RegexOption.IGNORE_CASE)),
                         emptyArray(),
                         "esptool --before no_reset --after no_reset --port ${device.serialPort!!.systemPortPath} read_mac",
-                        3000
+                        1000
                     )
                     val macResult = macAction.action("", "", startTime)
                     addResult(device, macResult)
@@ -384,6 +398,9 @@ class MainPanelTestingSuite(
                         device.deviceId = macResult.endValue.substring(5)
                         testerUi.setID(device.deviceNum, device.deviceId)
                         device.commitDevice = true
+                        // We just flashed it successfully, don't flash it again
+                        if(committedSuccessfulDeviceIds.contains(device.deviceId))
+                            device.flashingRequired = false
                     }
                 }
             }
@@ -395,6 +412,7 @@ class MainPanelTestingSuite(
         switchboard.powerOff()
         serialManager.closeAllPorts()
         testOnlyDeviceNum = -1
+        startTest = false
         val testEnd = System.currentTimeMillis()
         statusLogger.info("Done in ${(testEnd - testStart) / 1000}s")
         sleep(300)
@@ -404,20 +422,25 @@ class MainPanelTestingSuite(
         statusLogger.info("Searching for serial devices...")
         switchboard.powerOff()
         switchboard.disableAll()
-        sleep(powerBalanceTimeMS)
+        sleep(500L)
         switchboard.powerVbus()
         var foundSerials = 0
-        for (device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
-                continue
-            val startTime = System.currentTimeMillis()
-            switchboard.enableDevice(device.deviceNum)
-            if(findSerialPort(device, startTime)) {
-                foundSerials++
-//                break
-            } else {
-                //switchboard.disableDevice(device.deviceNum)
+        try {
+            for (device in deviceTests) {
+                if (testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                    continue
+                val startTime = System.currentTimeMillis()
+                if (findSerialPort(device, startTime, true)) {
+                    foundSerials++
+                }
             }
+            if (testOnlyDeviceNum >= 0) {
+                for (device in deviceTests) {
+                    switchboard.enableDevice(device.deviceNum)
+                }
+            }
+        } catch (ex: IOException) {
+            return false
         }
         statusLogger.info("Found $foundSerials serial devices")
         return true
@@ -449,10 +472,11 @@ class MainPanelTestingSuite(
                 for (test in device.testsList) {
                     if (test.status == TestStatus.ERROR) {
                         logger.severe(test.toString() + "\n" + test.log)
+                        statusLogger.severe("[${device.deviceNum + 1}] ${test.testName}: ${test.endValue}")
                     }
                 }
             } else {
-                logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Test success")
+                logger.info("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Test success")
             }
         }
     }
@@ -468,14 +492,24 @@ class MainPanelTestingSuite(
             }
             if(committedSuccessfulDeviceIds.contains(device.deviceId)) {
                 logger.info("[${device.deviceNum + 1}/$devices] Skipping, recently committed as ${device.deviceId}")
+                testerUi.setStatus(device.deviceNum, TestStatus.RETESTED)
                 continue
             }
-            committedSuccessfulDeviceIds.add(device.deviceId)
-            if(committedSuccessfulDeviceIds.size > 30)
-                committedSuccessfulDeviceIds.removeAt(0)
+            if(device.testStatus == TestStatus.PASS) {
+                committedSuccessfulDeviceIds.add(device.deviceId)
+                if (committedSuccessfulDeviceIds.size > 30)
+                    committedSuccessfulDeviceIds.removeAt(0)
+            }
             for(db in testingDatabases) {
                 val response = db.sendTestData(device)
                 logger.info("[${device.deviceNum + 1}/$devices] ${device.deviceId}: $response")
+            }
+            try {
+                val fw = FileWriter("testedBoards.txt", true)
+                fw.append(device.deviceId).append('\n')
+                fw.close()
+            } catch(ex: IOException) {
+                statusLogger.info("Tested boards file write error: ${ex.message}")
             }
         }
     }

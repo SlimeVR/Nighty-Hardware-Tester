@@ -36,7 +36,7 @@ class RemoteTestingDatabase(
         val json = writer.writeValueAsString(body)
         val request = httpRequestBuilder.POST(BodyPublishers.ofString(json)).build()
         val response = httpClient.send(request, BodyHandlers.ofString())
-        return response.body()
+        return "${response.statusCode()}: ${response.body()}"
     }
 
     private fun toReport(device: DeviceTest) = TestReport(

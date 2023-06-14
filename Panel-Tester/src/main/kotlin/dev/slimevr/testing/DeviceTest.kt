@@ -14,7 +14,7 @@ class DeviceTest(
     var deviceNum: Int
 ): SerialPortMessageListener {
 
-    var logger: Logger = Logger.getLogger("Devices")
+    var logger: Logger = Logger.getLogger("devices")
 
     var deviceId = ""
     var testStatus = TestStatus.TESTING
@@ -54,6 +54,7 @@ class DeviceTest(
                 writer.flush()
                 flushIOBuffers()
                 serialLog.add("-> $command")
+                logger.info("[${deviceNum+1}] Serial: -> $command")
             } catch (e: Throwable) {
                 e.printStackTrace()
                 return false
@@ -93,19 +94,7 @@ class DeviceTest(
     }
 
     override fun getListeningEvents() = (SerialPort.LISTENING_EVENT_PORT_DISCONNECTED
-        or SerialPort.LISTENING_EVENT_DATA_RECEIVED//)
-        or SerialPort.LISTENING_EVENT_DATA_AVAILABLE
-        or SerialPort.LISTENING_EVENT_BREAK_INTERRUPT
-        or SerialPort.LISTENING_EVENT_CARRIER_DETECT
-        or SerialPort.LISTENING_EVENT_CTS
-        or SerialPort.LISTENING_EVENT_DATA_WRITTEN
-        or SerialPort.LISTENING_EVENT_DSR
-        or SerialPort.LISTENING_EVENT_FRAMING_ERROR
-        or SerialPort.LISTENING_EVENT_FIRMWARE_OVERRUN_ERROR
-        or SerialPort.LISTENING_EVENT_PARITY_ERROR
-        or SerialPort.LISTENING_EVENT_RING_INDICATOR
-        or SerialPort.LISTENING_EVENT_SOFTWARE_OVERRUN_ERROR
-        or SerialPort.LISTENING_EVENT_TIMED_OUT)
+        or SerialPort.LISTENING_EVENT_DATA_RECEIVED)
 
 
     override fun getMessageDelimiter() = byteArrayOf(0x0A)

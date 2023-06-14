@@ -8,7 +8,7 @@ enum class TestStatus(
     DISCONNECTED(TextColor.ANSI.WHITE),
     TESTING(TextColor.ANSI.YELLOW),
     ERROR(TextColor.ANSI.RED_BRIGHT),
-    PASS(TextColor.ANSI.GREEN_BRIGHT)
-
+    PASS(TextColor.ANSI.GREEN_BRIGHT),
+    RETESTED(TextColor.ANSI.BLUE_BRIGHT)
 
 }

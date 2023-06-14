@@ -15,7 +15,7 @@ class SerialManager {
         port.setBaudRate(115200)
         port.clearRTS()
         port.clearDTR()
-        if(port.openPort(1500)) {
+        if(port.openPort(0)) {
             port.addDataListener(listener)
             return true
         }
@@ -26,18 +26,23 @@ class SerialManager {
         knownPorts.add(port)
     }
 
+    fun areKnownPortsConnected(): Boolean {
+        return SerialPort.getCommPorts()
+            .any { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } > 0) }
+    }
+
     fun closePort(port: SerialPort) {
         port.closePort()
         port.removeDataListener()
     }
 
     fun closeAllPorts() {
-        knownPorts.forEach { it.closePort() }
+        knownPorts.forEach { closePort(it) }
         knownPorts.clear()
     }
 
     private fun isValidPort(port: SerialPort): Boolean {
-        if(!port.systemPortPath.startsWith("/dev/ttyUSB"))
+        if(!port.systemPortPath.startsWith("/dev/ttyUSB") && !port.systemPortPath.startsWith("\\\\.\\COM"))
             return false
         arrayOf("ch340", "cp21", "ch910", "usb", "seri").forEach {
             if(port.descriptivePortName.lowercase().contains(it))

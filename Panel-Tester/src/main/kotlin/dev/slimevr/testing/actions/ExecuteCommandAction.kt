@@ -31,7 +31,7 @@ class ExecuteCommandAction(
         if (log.isNotBlank())
             fullLog.add(log)
         var logStart = fullLog.size
-        logger.info("Starting process: " + processBuilder.command().joinToString(" "))
+        //logger.info("Starting process: " + processBuilder.command().joinToString(" "))
         val process = processBuilder.start()
         val endTime = System.currentTimeMillis() + timeout
         val inputReader = process.inputReader()
@@ -46,6 +46,7 @@ class ExecuteCommandAction(
                 }
             } catch(ex: IOException) {
                 ex.message?.let { fullLog.add(it) }
+                break
             }
             fullLog.subList(logStart, fullLog.size).forEach {
                 //logger.info(it)
