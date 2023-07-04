@@ -171,7 +171,8 @@ class Stage2TestingSuite(
             ),
             arrayOf(
                 "ERR".toRegex(),
-                "FATAL".toRegex()
+                "FATAL".toRegex(),
+                "Connected to BNO085 on 0x4a".toRegex()
             ),
             device,
             30000
