@@ -80,8 +80,7 @@ class Stage2TestingSuite(
             reportTestResults(device)
         } else {
             statusLogger.severe("Can't open port. Error ${port.lastErrorCode}")
-            sleep(10000)
-            return
+            sleep(500L)
         }
         statusLogger.info("Testing finished, disconnect the device!")
         while(serialManager.areKnownPortsConnected()) {

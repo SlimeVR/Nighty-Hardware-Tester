@@ -13,6 +13,7 @@ import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.MainPanelTestingSuite
 import dev.slimevr.testing.TestStatus
 import dev.slimevr.testing.destroy
+import java.lang.Character.isDigit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
 
@@ -96,15 +97,28 @@ class TesterUI(
         window.addWindowListener(object: WindowListenerAdapter() {
             override fun onInput(basePane: Window?, keyStroke: KeyStroke?, deliverEvent: AtomicBoolean?) {
                 //LogManager.global.info(keyStroke?.toString())
-                if(keyStroke?.character == ' ') {
-                    suite.startTest(-1)
-                } else if(keyStroke?.character?.isDigit() == true) {
-                    var device = keyStroke.character.digitToInt()
-                    if(device == 0)
-                        device = 9
-                    else
-                        device -= 1
-                    suite.startTest(device)
+                val ch = keyStroke?.character
+                when {
+                    ch == null -> {}
+                    ch == ' ' -> {
+                        suite.startTest(0,1,2,3,4,5,6,7,8,9)
+                    }
+                    ch.isDigit() -> {
+                        var device = keyStroke.character.digitToInt()
+                        if(device == 0)
+                            device = 9
+                        else
+                            device -= 1
+                        suite.startTest(device)
+                    }
+                    ch == 'r' -> {
+                    }
+                    ch == 'u' -> {
+                        suite.startTest(0, 1, 2, 3, 4)
+                    }
+                    ch == 'j' -> {
+                        suite.startTest(5, 6, 7, 8, 9)
+                    }
                 }
             }
         })

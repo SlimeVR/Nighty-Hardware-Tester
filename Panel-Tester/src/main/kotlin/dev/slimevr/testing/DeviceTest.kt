@@ -11,10 +11,10 @@ import java.util.logging.Logger
 
 
 class DeviceTest(
-    var deviceNum: Int
+    val deviceNum: Int
 ): SerialPortMessageListener {
 
-    var logger: Logger = Logger.getLogger("devices")
+    val logger: Logger = Logger.getLogger("devices")
 
     var deviceId = ""
     var testStatus = TestStatus.TESTING
@@ -53,7 +53,9 @@ class DeviceTest(
                 writer.append(command).append("\n")
                 writer.flush()
                 flushIOBuffers()
-                serialLog.add("-> $command")
+                synchronized(serialLog) {
+                    serialLog.add("-> $command")
+                }
                 logger.info("[${deviceNum+1}] Serial: -> $command")
             } catch (e: Throwable) {
                 e.printStackTrace()
@@ -68,11 +70,11 @@ class DeviceTest(
             val newData = event.receivedData
             val lines = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(newData)).toString()
                 .replace("[^a-zA-Z0-9_\\-\\[\\]()*., \n\r:'\"]".toRegex(), "*").split('\n')
+            val nonBlank = lines.filter { s -> s.isNotBlank() }
             synchronized(serialLog) {
-                serialLog.addAll(lines.filter { s -> s.isNotBlank() })
+                serialLog.addAll(nonBlank)
             }
-            for(line in lines)
-                if(line.isNotBlank())
+            for(line in nonBlank)
                     logger.info("[${deviceNum+1}] Serial: $line")
         } else if (event.eventType == SerialPort.LISTENING_EVENT_PORT_DISCONNECTED) {
             synchronized(serialLog) {

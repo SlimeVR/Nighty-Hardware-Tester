@@ -54,7 +54,7 @@ class MainPanelTestingSuite(
     private var testStart = 0L
     private var committedSuccessfulDeviceIds = mutableListOf<String>()
     private var startTest: Boolean = false
-    private var testOnlyDeviceNum = -1
+    private var testOnlyDevices = setOf<Int>()
 
     override fun run() {
         try {
@@ -102,9 +102,9 @@ class MainPanelTestingSuite(
         }
     }
 
-    fun startTest(deviceNum: Int) {
+    fun startTest(vararg devices: Int) {
         // TODO one device doesn't work somewhere, maybe hardware flash/reset error
-        testOnlyDeviceNum = deviceNum
+        testOnlyDevices = setOf(*devices.toTypedArray())
         startTest = true
     }
 
@@ -115,7 +115,7 @@ class MainPanelTestingSuite(
         switchboard.powerVbus()
         statusLogger.info("Checking firmware status...")
         for(device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             // TODO : Run in parallel?
             val startTime = System.currentTimeMillis()
@@ -201,7 +201,7 @@ class MainPanelTestingSuite(
         switchboard.powerVbus()
         sleep(bootTimeMS)
         for(device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
@@ -338,7 +338,7 @@ class MainPanelTestingSuite(
         flash()
         val flashThreads = mutableListOf<Thread>()
         for (device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             val startTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR || device.serialPort == null || device.deviceId.isBlank()) {
@@ -373,7 +373,7 @@ class MainPanelTestingSuite(
         statusLogger.info("Reading MAC addresses...")
         flash()
         for (device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             if(device.deviceId.isNotBlank()) {
                 logger.info("[${device.deviceNum + 1}/$devices] Has firmware, loaded ${device.deviceId} address")
@@ -411,7 +411,7 @@ class MainPanelTestingSuite(
         switchboard.disableAll()
         switchboard.powerOff()
         serialManager.closeAllPorts()
-        testOnlyDeviceNum = -1
+        testOnlyDevices = setOf()
         startTest = false
         val testEnd = System.currentTimeMillis()
         statusLogger.info("Done in ${(testEnd - testStart) / 1000}s")
@@ -427,14 +427,14 @@ class MainPanelTestingSuite(
         var foundSerials = 0
         try {
             for (device in deviceTests) {
-                if (testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+                if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                     continue
                 val startTime = System.currentTimeMillis()
                 if (findSerialPort(device, startTime, true)) {
                     foundSerials++
                 }
             }
-            if (testOnlyDeviceNum >= 0) {
+            if (testOnlyDevices.isNotEmpty()) {
                 for (device in deviceTests) {
                     switchboard.enableDevice(device.deviceNum)
                 }
@@ -449,7 +449,7 @@ class MainPanelTestingSuite(
     private fun checkTestResults(): Boolean {
         var failed = false
         for (device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             device.endTime = System.currentTimeMillis()
             if (device.testStatus == TestStatus.ERROR) {
@@ -465,7 +465,7 @@ class MainPanelTestingSuite(
 
     private fun reportTestResults() {
         for (device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             if (device.testStatus == TestStatus.ERROR) {
                 logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Test failed")
@@ -484,7 +484,7 @@ class MainPanelTestingSuite(
     private fun commitTestResults() {
         logger.info("Committing the test results to database...")
         for(device in deviceTests) {
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             if(device.deviceId.isBlank()) {
                 logger.info("[${device.deviceNum + 1}/$devices] Skipping, no ID")
@@ -534,18 +534,21 @@ class MainPanelTestingSuite(
     }
 
     private fun testStart() {
-        if(testOnlyDeviceNum >= 0) {
-            testerUi.setStatus(testOnlyDeviceNum, TestStatus.TESTING)
-            testerUi.setID(testOnlyDeviceNum, "")
-            if(deviceTests.size < 10) {
-                for (i in 0 until devices) {
-                    val device = DeviceTest(i)
-                    deviceTests.add(device)
+        if(testOnlyDevices.isNotEmpty()) {
+            testOnlyDevices.forEach {
+                testerUi.setStatus(it, TestStatus.TESTING)
+                testerUi.setID(it, "")
+                if(deviceTests.size < 10) {
+                    for (i in 0 until devices) {
+                        val device = DeviceTest(i)
+                        deviceTests.add(device)
+                    }
                 }
+                deviceTests[it] = DeviceTest(it)
+                statusLogger.info("Retesting device ${it+1}")
+                testStart = System.currentTimeMillis()
             }
-            deviceTests[testOnlyDeviceNum] = DeviceTest(testOnlyDeviceNum)
-            statusLogger.info("Retesting device ${testOnlyDeviceNum+1}")
-            testStart = System.currentTimeMillis()
+
             return
         }
         testerUi.statusLogHandler.clear()
@@ -571,7 +574,7 @@ class MainPanelTestingSuite(
 
         for (i in 0 until devices) {
             val device = deviceTests[i]
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             statusLogger.info("[${i + 1}/$devices] Testing power from VBUS... ")
             switchboard.enableDevice(i)
@@ -607,7 +610,7 @@ class MainPanelTestingSuite(
 
         for (i in 0 until devices) {
             val device = deviceTests[i]
-            if(testOnlyDeviceNum >= 0 && testOnlyDeviceNum != device.deviceNum)
+            if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
                 continue
             statusLogger.info("[${i + 1}/$devices] Testing power from Battery... ")
             switchboard.enableDevice(i)

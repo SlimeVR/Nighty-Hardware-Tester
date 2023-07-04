@@ -49,10 +49,9 @@ class SerialMatchingAction(
                             }
                         }
                         serialLogRead = serialLog.size
-                    } else {
-                        sleep(10)
                     }
                 }
+                sleep(10)
             }
         }
         synchronized(device.serialLog) {
