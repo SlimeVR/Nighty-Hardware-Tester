@@ -51,13 +51,12 @@ fun main(args: Array<String>) {
         val suite = Stage2TestingSuite(listOf(database), testerUI, globalLogger, statusLogger)
         suite.start()
     } else {
-        val testerUi = TesterUI(globalLogger, statusLogger)
-        sleep(500)
-
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("linuxfs-i2c")
         val switchboard = Switchboard(pi4j!!)
         val adcProvider = ADCProvider(i2CProvider)
+
+        val testerUi = TesterUI(globalLogger, statusLogger)
 
         val suite =
             MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10, globalLogger, statusLogger)
