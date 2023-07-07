@@ -51,12 +51,14 @@ class TesterUI(
             testerPanel.setLayoutManager(GridLayout(1))
             testerPanel.addComponent(statusColorPanel, GridLayout.createHorizontallyFilledLayoutData())
             testerPanel.addComponent(idLabel, GridLayout.createHorizontallyFilledLayoutData())
+            val usbLabel = Label("")
+            testerPanel.addComponent(usbLabel, GridLayout.createHorizontallyFilledLayoutData())
             mainPanel.addComponent(
                 testerPanel.withBorder(Borders.singleLine("Board $i")),
                 GridLayout.createHorizontallyFilledLayoutData()
             )
 
-            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel)
+            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel, usbLabel)
             testedDevicesUI.add(deviceUI)
         }
         val logLabel = SlimyLabel("")
@@ -130,6 +132,10 @@ class TesterUI(
 
     fun setID(device: Int, id: String) {
         testedDevicesUI[device].idLabel.text = id
+    }
+
+    fun setUSB(device: Int, usb: String) {
+        testedDevicesUI[device].usbLabel.text = usb
     }
 
     fun clear() {

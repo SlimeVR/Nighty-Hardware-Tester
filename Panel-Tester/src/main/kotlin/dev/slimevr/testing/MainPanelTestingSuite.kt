@@ -1,5 +1,6 @@
 package dev.slimevr.testing
 
+import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.actions.*
@@ -9,7 +10,6 @@ import java.io.FileWriter
 import java.io.IOException
 import java.util.logging.Level
 import java.util.logging.Logger
-import kotlin.math.log
 
 class MainPanelTestingSuite(
     private val switchboard: Switchboard,
@@ -23,7 +23,7 @@ class MainPanelTestingSuite(
 
     private val powerBalanceTimeMS = 100L
     private val flashResetPinsMS = 300L
-    private var serialBootTimeMS = 200L
+    private val serialBootTimeMS = 200L
     private val bootTimeMS = 1500L
     private val resetTimeMS = 300L
     private val FIRMWARE_BUILD = 15
@@ -50,11 +50,17 @@ class MainPanelTestingSuite(
 
     private val firmwareFile = System.getenv("TESTER_FIRMWARE_FILE")
 
+    private val usbPortsMap = mapOf(Pair("1-1.2.2", 0), Pair("1-1.1.2", 1), Pair("1-1.2.3", 2), Pair("1-1.2.4", 3), Pair("1-1.1.4", 4),
+        Pair("1-1.3.2", 5), Pair("1-1.3.1", 6), Pair("1-1.1.1", 7), Pair("1-1.2.1", 8), Pair("1-1.1.3", 9)
+    )
+
     private val deviceTests = mutableListOf<DeviceTest>()
     private var testStart = 0L
-    private var committedSuccessfulDeviceIds = mutableListOf<String>()
+    private val committedSuccessfulDeviceIds = mutableListOf<String>()
     private var startTest: Boolean = false
     private var testOnlyDevices = setOf<Int>()
+    private val dmesgWatcher = USBMapWatcher(this)
+    private val usbMap = mutableMapOf<String,Int>()
 
     override fun run() {
         try {
@@ -74,6 +80,7 @@ class MainPanelTestingSuite(
             logger.log(Level.SEVERE, "Self-test failed", exception)
             return
         }
+        dmesgWatcher.start()
         logger.info("Testing suit started~")
         while (true) {
             try {
@@ -108,6 +115,17 @@ class MainPanelTestingSuite(
         startTest = true
     }
 
+    fun setUSB(addr: String, tty: String) {
+        val device = usbPortsMap[addr] ?: return
+        if(tty.isBlank()) {
+            testerUi.setUSB(device, tty)
+            usbMap.remove(tty)
+        } else {
+            testerUi.setUSB(device, "/dev/$tty")
+            usbMap[tty] = device
+        }
+    }
+
     private fun checkFirmware() {
         switchboard.powerOff()
         switchboard.disableAll()
@@ -123,7 +141,7 @@ class MainPanelTestingSuite(
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
                 statusLogger.info("[${device.deviceNum + 1}/$devices] Fetching data...")
-                if(findSerialPort(device, startTime, true)) {
+                //if(findSerialPort(device, startTime, true)) {
                     //for (i in 1..5) {
                         if (serialManager.openPort(device.serialPort!!, device)) {
                             statusLogger.info("[${device.deviceNum + 1}/$devices] Port ${device.serialPort!!.systemPortPath} open")
@@ -161,7 +179,7 @@ class MainPanelTestingSuite(
                             }
                         }
                     serialManager.closePort(device.serialPort!!)
-                }
+                //}
                 switchboard.disableDevice(device.deviceNum)
             }
         }
@@ -208,11 +226,11 @@ class MainPanelTestingSuite(
                 logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else {
                 statusLogger.info("[${device.deviceNum + 1}/$devices] Testing ${device.deviceId}")
-                if(findSerialPort(device, startTime, true)) {
-                    // todo open
-                    testI2C(device)
-                    testIMU(device)
-                }
+//                if(findSerialPort(device, startTime, true)) {
+//                    // todo open
+//                    testI2C(device)
+//                    testIMU(device)
+//                }
                 serialManager.closeAllPorts()
                 switchboard.disableAll()
             }
@@ -269,51 +287,49 @@ class MainPanelTestingSuite(
         }
     }
 
-    private fun findSerialPort(device: DeviceTest, startTime: Long, enable: Boolean): Boolean {
-        if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
-            return false
-        } else {
-            if(enable)
-                switchboard.enableDevice(device.deviceNum)
-            for (i in 1..10) {
-                sleep(serialBootTimeMS)
-                val newPorts = serialManager.findNewPorts()
-                if (newPorts.size > 1) {
-                    logger.severe("[${device.deviceNum + 1}/$devices] More than one new serial device detected")
-                    logger.severe(
-                        "Tester can not proceed from here and the testing will end immediately, "
-                            + "no results will be saved. Found ports:"
-                    )
-                    newPorts.forEach {
-                        logger.severe("${it.portDescription} : ${it.descriptivePortName} : ${it.systemPortPath} : ${it.portLocation}")
-                    }
-                    for (otherDevice in deviceTests) {
-                        otherDevice.addTestResult(serialFound.action(false, "More than one serial port found: ${newPorts.joinToString { p -> p.descriptivePortName + " " + p.systemPortPath }}", startTime))
-                    }
-                    throw IOException("Too many opened serial ports")
-                } else if (newPorts.size == 1) {
-                    device.serialPort = newPorts.first()
-                    serialManager.markAsKnown(device.serialPort!!)
-                    logger.info("[${device.deviceNum + 1}/$devices] Device used: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}")
-                    break
-                } else {
-                    sleep(500)
-                }
-            }
-            if (device.serialPort == null) {
-                val connectTest = serialFound.action(false, "No serial ports found", startTime)
-                addResult(device, connectTest)
-                return false
-            } else {
-                val connectTest = serialFound.action(true, "Serial port found: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}", startTime)
-                addResult(device, connectTest)
-                return true
-            }
-        }
-
-
-    }
+//    private fun findSerialPort(device: DeviceTest, startTime: Long, enable: Boolean): Boolean {
+//        if (device.testStatus == TestStatus.ERROR) {
+//            logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
+//            return false
+//        } else {
+//            if(enable)
+//                switchboard.enableDevice(device.deviceNum)
+//            for (i in 1..10) {
+//                sleep(serialBootTimeMS)
+//                val newPorts = serialManager.findNewPorts()
+//                if (newPorts.size > 1) {
+//                    logger.severe("[${device.deviceNum + 1}/$devices] More than one new serial device detected")
+//                    logger.severe(
+//                        "Tester can not proceed from here and the testing will end immediately, "
+//                            + "no results will be saved. Found ports:"
+//                    )
+//                    newPorts.forEach {
+//                        logger.severe("${it.portDescription} : ${it.descriptivePortName} : ${it.systemPortPath} : ${it.portLocation}")
+//                    }
+//                    for (otherDevice in deviceTests) {
+//                        otherDevice.addTestResult(serialFound.action(false, "More than one serial port found: ${newPorts.joinToString { p -> p.descriptivePortName + " " + p.systemPortPath }}", startTime))
+//                    }
+//                    throw IOException("Too many opened serial ports")
+//                } else if (newPorts.size == 1) {
+//                    device.serialPort = newPorts.first()
+//                    serialManager.markAsKnown(device.serialPort!!)
+//                    logger.info("[${device.deviceNum + 1}/$devices] Device used: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}")
+//                    break
+//                } else {
+//                    sleep(500)
+//                }
+//            }
+//            if (device.serialPort == null) {
+//                val connectTest = serialFound.action(false, "No serial ports found", startTime)
+//                addResult(device, connectTest)
+//                return false
+//            } else {
+//                val connectTest = serialFound.action(true, "Serial port found: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}", startTime)
+//                addResult(device, connectTest)
+//                return true
+//            }
+//        }
+//    }
 
     private fun reboot() {
         switchboard.resetMode(true)
@@ -419,28 +435,32 @@ class MainPanelTestingSuite(
     }
 
     private fun enumerateSerialDevices(): Boolean {
-        statusLogger.info("Searching for serial devices...")
+        statusLogger.info("Waiting for serial devices...")
         switchboard.powerOff()
         switchboard.disableAll()
         sleep(500L)
         switchboard.powerVbus()
+        for (device in deviceTests) {
+            switchboard.enableDevice(device.deviceNum)
+        }
+        sleep(serialBootTimeMS)
         var foundSerials = 0
-        try {
-            for (device in deviceTests) {
-                if(testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(device.deviceNum))
-                    continue
-                val startTime = System.currentTimeMillis()
-                if (findSerialPort(device, startTime, true)) {
-                    foundSerials++
-                }
+        var ports: List<SerialPort>? = null
+        val endWait = System.currentTimeMillis() + 3000
+        while(System.currentTimeMillis() < endWait) {
+            ports = serialManager.findNewPorts()
+            if(ports.size == 10)
+                break
+        }
+        ports?.forEach {
+            val deviceNum = usbMap[it.systemPortPath.substring(5)]
+            if(deviceNum != null) {
+                val device = deviceTests[deviceNum]
+                device.serialPort = it
+                serialManager.markAsKnown(device.serialPort!!)
+                foundSerials++
+                logger.info("[${device.deviceNum + 1}/$devices] Device used: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}")
             }
-            if (testOnlyDevices.isNotEmpty()) {
-                for (device in deviceTests) {
-                    switchboard.enableDevice(device.deviceNum)
-                }
-            }
-        } catch (ex: IOException) {
-            return false
         }
         statusLogger.info("Found $foundSerials serial devices")
         return true
@@ -495,21 +515,21 @@ class MainPanelTestingSuite(
                 testerUi.setStatus(device.deviceNum, TestStatus.RETESTED)
                 continue
             }
-            if(device.testStatus == TestStatus.PASS) {
-                committedSuccessfulDeviceIds.add(device.deviceId)
-                if (committedSuccessfulDeviceIds.size > 30)
-                    committedSuccessfulDeviceIds.removeAt(0)
-            }
             for(db in testingDatabases) {
                 val response = db.sendTestData(device)
                 logger.info("[${device.deviceNum + 1}/$devices] ${device.deviceId}: $response")
             }
-            try {
-                val fw = FileWriter("testedBoards.txt", true)
-                fw.append(device.deviceId).append('\n')
-                fw.close()
-            } catch(ex: IOException) {
-                statusLogger.info("Tested boards file write error: ${ex.message}")
+            if(device.testStatus == TestStatus.PASS) {
+                committedSuccessfulDeviceIds.add(device.deviceId)
+                if (committedSuccessfulDeviceIds.size > 30)
+                    committedSuccessfulDeviceIds.removeAt(0)
+                try {
+                    val fw = FileWriter("testedBoards.txt", true)
+                    fw.append(device.deviceId).append('\n')
+                    fw.close()
+                } catch (ex: IOException) {
+                    statusLogger.info("Tested boards file write error: ${ex.message}")
+                }
             }
         }
     }

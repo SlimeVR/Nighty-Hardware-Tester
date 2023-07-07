@@ -79,12 +79,14 @@ class Stage2UI (
             testerPanel.setLayoutManager(GridLayout(1))
             testerPanel.addComponent(statusColorPanel, GridLayout.createHorizontallyFilledLayoutData())
             testerPanel.addComponent(idLabel, GridLayout.createHorizontallyFilledLayoutData())
+            val usbLabel = Label("")
+            testerPanel.addComponent(usbLabel, GridLayout.createHorizontallyFilledLayoutData())
             mainPanel.addComponent(
                 testerPanel.withBorder(Borders.singleLine("Board $i")),
                 GridLayout.createHorizontallyFilledLayoutData()
             )
 
-            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel)
+            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel, usbLabel)
             testedDevicesUI.add(deviceUI)
         }
 
