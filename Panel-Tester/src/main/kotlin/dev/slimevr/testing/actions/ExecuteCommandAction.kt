@@ -3,6 +3,7 @@ package dev.slimevr.testing.actions
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
 import java.io.IOException
+import java.lang.StringBuilder
 import java.util.logging.Logger
 
 /**
@@ -38,11 +39,20 @@ class ExecuteCommandAction(
         var testResult = TestStatus.TESTING
         var matchedString = ""
         var destroyed = false
+        var currentLine = StringBuilder()
         do {
             try {
-                when (val line = inputReader.readLine()) {
-                    null -> break
-                    else -> if (line.isNotBlank()) fullLog.add(line)
+                while(inputReader.ready()) {
+                    when (val ch = inputReader.read()) {
+                        -1 -> break
+                        '\n'.code -> {
+                            if (currentLine.isNotBlank()) {
+                                fullLog.add(currentLine.toString())
+                                currentLine.setLength(0)
+                            }
+                        }
+                        else -> currentLine.appendCodePoint(ch)
+                    }
                 }
             } catch(ex: IOException) {
                 ex.message?.let { fullLog.add(it) }

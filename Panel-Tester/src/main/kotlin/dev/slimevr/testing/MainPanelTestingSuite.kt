@@ -406,7 +406,7 @@ class MainPanelTestingSuite(
                         arrayOf(".*MAC: .*".toRegex(RegexOption.IGNORE_CASE)),
                         emptyArray(),
                         "esptool --before no_reset --after no_reset --port ${device.serialPort!!.systemPortPath} read_mac",
-                        1000
+                        2000
                     )
                     val macResult = macAction.action("", "", startTime)
                     addResult(device, macResult)
