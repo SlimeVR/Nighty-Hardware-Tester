@@ -423,6 +423,10 @@ class MainPanelTestingSuite(
         }
     }
 
+    fun getFailedDevices(): List<Int> {
+        return deviceTests.filter { it.testStatus == TestStatus.ERROR }.map { it.deviceNum }
+    }
+
     private fun testEnd() {
         switchboard.disableAll()
         switchboard.powerOff()

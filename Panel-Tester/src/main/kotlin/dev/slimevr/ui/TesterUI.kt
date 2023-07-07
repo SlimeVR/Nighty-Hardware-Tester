@@ -114,6 +114,9 @@ class TesterUI(
                         suite.startTest(device)
                     }
                     ch == 'r' -> {
+                        val failed = suite.getFailedDevices()
+                        if(failed.isNotEmpty())
+                            suite.startTest(*failed.toIntArray())
                     }
                     ch == 'u' -> {
                         suite.startTest(0, 1, 2, 3, 4)
