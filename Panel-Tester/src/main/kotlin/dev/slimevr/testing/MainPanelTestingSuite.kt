@@ -22,7 +22,7 @@ class MainPanelTestingSuite(
 ) : Thread("Testing suit thread") {
 
     private val powerBalanceTimeMS = 100L
-    private val flashResetPinsMS = 300L
+    private val flashResetPinsMS = 200L
     private val serialBootTimeMS = 200L
     private val bootTimeMS = 1500L
     private val resetTimeMS = 300L
@@ -56,6 +56,7 @@ class MainPanelTestingSuite(
 
     private val deviceTests = mutableListOf<DeviceTest>()
     private var testStart = 0L
+    private var isTesting = false
     private val committedSuccessfulDeviceIds = mutableListOf<String>()
     private var startTest: Boolean = false
     private var testOnlyDevices = setOf<Int>()
@@ -90,6 +91,9 @@ class MainPanelTestingSuite(
                 logger.log(Level.SEVERE, "Standby error, can't continue", exception)
                 return
             }
+            synchronized(this) {
+                isTesting = true
+            }
             try {
                 testVBUSVoltages()
                 testBATVoltages()
@@ -106,10 +110,17 @@ class MainPanelTestingSuite(
             } catch(exception: Throwable) {
                 logger.log(Level.SEVERE, "Tester error", exception)
             }
+            synchronized(this) {
+                isTesting = false
+            }
         }
     }
 
     fun startTest(vararg devices: Int) {
+        synchronized(this) {
+            if(isTesting)
+                return
+        }
         // TODO one device doesn't work somewhere, maybe hardware flash/reset error
         testOnlyDevices = setOf(*devices.toTypedArray())
         startTest = true
@@ -444,18 +455,21 @@ class MainPanelTestingSuite(
         switchboard.disableAll()
         sleep(500L)
         switchboard.powerVbus()
+        val startTime = System.currentTimeMillis()
         for (device in deviceTests) {
             switchboard.enableDevice(device.deviceNum)
         }
         sleep(serialBootTimeMS)
         var foundSerials = 0
         var ports: List<SerialPort>? = null
-        val endWait = System.currentTimeMillis() + 3000
+        val endWait = System.currentTimeMillis() + 5000
         while(System.currentTimeMillis() < endWait) {
             ports = serialManager.findNewPorts()
             if(ports.size == 10)
                 break
         }
+        sleep(500)
+        ports = serialManager.findNewPorts()
         ports?.forEach {
             val deviceNum = usbMap[it.systemPortPath.substring(5)]
             if(deviceNum != null) {
@@ -464,6 +478,15 @@ class MainPanelTestingSuite(
                 serialManager.markAsKnown(device.serialPort!!)
                 foundSerials++
                 logger.info("[${device.deviceNum + 1}/$devices] Device used: ${device.serialPort!!.descriptivePortName} ${device.serialPort!!.systemPortPath}")
+            }
+        }
+        deviceTests.forEach {
+            if (it.serialPort == null) {
+                val connectTest = serialFound.action(false, "Serial port not found for the device", startTime)
+                addResult(it, connectTest)
+            } else {
+                val connectTest = serialFound.action(true, "Serial port found: ${it.serialPort!!.descriptivePortName} ${it.serialPort!!.systemPortPath}", startTime)
+                addResult(it, connectTest)
             }
         }
         statusLogger.info("Found $foundSerials serial devices")

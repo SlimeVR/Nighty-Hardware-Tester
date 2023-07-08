@@ -78,6 +78,8 @@ class ExecuteCommandAction(
             }
             logStart = fullLog.size
         } while(process.isAlive)
+        if(currentLine.isNotBlank())
+            fullLog.add(currentLine.toString())
         //fullLog.add("Process ended with ${process.exitValue()} exit code")
         // If we didn't pass the test yet, it's a failure
         if (testResult == TestStatus.TESTING) {
