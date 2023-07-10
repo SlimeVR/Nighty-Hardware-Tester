@@ -124,6 +124,26 @@ class TesterUI(
                     ch == 'j' -> {
                         suite.startTest(5, 6, 7, 8, 9)
                     }
+                    ch == 't' -> {
+                        val failed = suite.getFailedDevices()
+                        if(failed.isNotEmpty()) {
+                            suite.startTest(*failed.map {
+                                when(it) {
+                                    0 -> 9
+                                    1 -> 8
+                                    2 -> 7
+                                    3 -> 6
+                                    4 -> 5
+                                    5 -> 4
+                                    6 -> 3
+                                    7 -> 2
+                                    8 -> 1
+                                    9 -> 0
+                                    else -> 0
+                                }
+                            }.toIntArray())
+                        }
+                    }
                 }
             }
         })
