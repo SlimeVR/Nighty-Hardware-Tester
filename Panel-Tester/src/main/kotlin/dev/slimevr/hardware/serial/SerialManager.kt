@@ -44,7 +44,7 @@ class SerialManager {
     private fun isValidPort(port: SerialPort): Boolean {
         if(!port.systemPortPath.startsWith("/dev/ttyUSB") && !port.systemPortPath.startsWith("\\\\.\\COM"))
             return false
-        arrayOf("ch340", "cp21", "ch910", "usb", "seri").forEach {
+        arrayOf("ch340").forEach {
             if(port.descriptivePortName.lowercase().contains(it))
                 return true
         }
