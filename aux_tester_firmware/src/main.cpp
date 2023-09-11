@@ -66,7 +66,7 @@ void setup()
 
 #define BNO_EXT_WRONG_ADDRESS 0x4a
 #define BNO_EXT_ADDRESS 0x4b
-#define IMU_TIMEOUT 1000
+#define IMU_TIMEOUT 300
 
 void printPass() {
     Serial.print("\033[32;42m  _____           _____  _____                         \n"

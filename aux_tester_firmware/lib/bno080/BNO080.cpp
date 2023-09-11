@@ -71,7 +71,7 @@ boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, uint8_t intPin)
 	bool tBoardInfoReceived = false;
 
 	// Wait max 2.5s for the product_id_response and ignore other packets received during that time.
-	while (millis() - tInitialResetTimeMS < 2500 && (!tBoardInfoReceived)) {
+	while (millis() - tInitialResetTimeMS < 500 && (!tBoardInfoReceived)) {
 		receivePacket();
 		if (shtpHeader[2] == 2 && shtpData[0] == SHTP_REPORT_PRODUCT_ID_RESPONSE) {
 			tBoardInfoReceived = true;
