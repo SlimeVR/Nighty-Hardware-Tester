@@ -11,7 +11,7 @@ import java.util.logging.Logger
 
 
 class DeviceTest(
-    val deviceNum: Int
+    var deviceNum: Int
 ): SerialPortMessageListener {
 
     val logger: Logger = Logger.getLogger("devices")

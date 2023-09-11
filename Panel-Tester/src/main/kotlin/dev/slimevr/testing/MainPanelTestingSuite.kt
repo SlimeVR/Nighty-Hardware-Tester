@@ -438,6 +438,23 @@ class MainPanelTestingSuite(
         return deviceTests.filter { it.testStatus == TestStatus.ERROR }.map { it.deviceNum }
     }
 
+    fun transposeDevices() {
+        val tmp = mutableMapOf<Int,DeviceTest>()
+        deviceTests.forEach {
+            val newIndex = transposeDeviceIndex(it.deviceNum)
+            it.deviceNum = newIndex
+            tmp[newIndex] = it
+        }
+        deviceTests.clear()
+        for(i in 0..9) {
+            tmp[i]!!.let {
+                deviceTests.add(it)
+                testerUi.setStatus(it.deviceNum, it.testStatus)
+                testerUi.setID(it.deviceNum, it.deviceId)
+            }
+        }
+    }
+
     private fun testEnd() {
         switchboard.disableAll()
         switchboard.powerOff()
@@ -470,7 +487,7 @@ class MainPanelTestingSuite(
         }
         sleep(500)
         ports = serialManager.findNewPorts()
-        ports?.forEach {
+        ports.forEach {
             val deviceNum = usbMap[it.systemPortPath.substring(5)]
             if(deviceNum != null) {
                 val device = deviceTests[deviceNum]
@@ -692,5 +709,21 @@ class MainPanelTestingSuite(
         else
             logger.info("[${device.deviceNum + 1}/$devices] $result")
         testerUi.setStatus(device.deviceNum, device.testStatus)
+    }
+
+    private fun transposeDeviceIndex(num: Int): Int {
+        return when(num) {
+            0 -> 9
+            1 -> 8
+            2 -> 7
+            3 -> 6
+            4 -> 5
+            5 -> 4
+            6 -> 3
+            7 -> 2
+            8 -> 1
+            9 -> 0
+            else -> 0
+        }
     }
 }
