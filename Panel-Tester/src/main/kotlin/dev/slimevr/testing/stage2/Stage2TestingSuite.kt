@@ -27,7 +27,7 @@ class Stage2TestingSuite(
 
     private var committedSuccessfulDeviceIds = mutableListOf<String>()
 
-    private val FIRMWARE_BUILD = 15
+    private val FIRMWARE_BUILD = 17
 
     override fun run() {
         try {

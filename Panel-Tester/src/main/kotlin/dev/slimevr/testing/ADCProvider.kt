@@ -16,6 +16,6 @@ class ADCProvider(
     fun getVCCVoltage() : Float = ADS1X15_1.getVoltage(1u)
     fun getVBUSVoltage() : Float = ADS1X15_1.getVoltage(2u)
     fun getBatVoltage() : Float = ADS1X15_1.getVoltage(3u)
-    fun getChrgVoltage() : Float = ADS1X15_2.getVoltage(0u)
-    fun getFullVoltage() : Float = ADS1X15_2.getVoltage(1u)
+    fun getChrgVoltage() : Float = 0f //ADS1X15_2.getVoltage(0u)
+    fun getFullVoltage() : Float = 0f //ADS1X15_2.getVoltage(1u)
 }

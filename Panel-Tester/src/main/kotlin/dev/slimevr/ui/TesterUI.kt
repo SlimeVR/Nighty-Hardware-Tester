@@ -98,11 +98,13 @@ class TesterUI(
     fun registerTestingSuite(suite: MainPanelTestingSuite) {
         window.addWindowListener(object: WindowListenerAdapter() {
             override fun onInput(basePane: Window?, keyStroke: KeyStroke?, deliverEvent: AtomicBoolean?) {
-                //LogManager.global.info(keyStroke?.toString())
+                if(!suite.isReady())
+                    return
                 val ch = keyStroke?.character
                 when {
                     ch == null -> {}
                     ch == ' ' -> {
+                        suite.btnPressed()
                         suite.startTest()
                     }
                     ch.isDigit() -> {

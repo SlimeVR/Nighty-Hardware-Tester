@@ -27,8 +27,8 @@ object LogManager {
                 if (f.name.startsWith("log_last")) f.delete()
             }
         }
-        val lastLogPattern = Path.of(mainLogDir.path, "log_last_%g.log").toString()
-        val fileHandler = FileHandler(lastLogPattern, 25 * 1000000, 2)
+        val lastLogPattern = Path.of(mainLogDir.path, "log_last.log").toString()
+        val fileHandler = FileHandler(lastLogPattern, 25 * 1000000, 1)
         fileHandler.formatter = loc
         global.addHandler(fileHandler)
 
