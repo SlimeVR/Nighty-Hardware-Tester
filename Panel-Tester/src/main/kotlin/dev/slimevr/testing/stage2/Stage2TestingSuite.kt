@@ -121,24 +121,28 @@ class Stage2TestingSuite(
             statusLogger.info("[${device.deviceNum + 1}] Skipping, no ID")
             return
         }
-        if(committedSuccessfulDeviceIds.contains(device.deviceId)) {
-            statusLogger.info("[${device.deviceNum + 1}] Skipping, recently committed as ${device.deviceId}")
-            testerUi.setStatus(device.deviceNum, TestStatus.RETESTED)
-            return
+        if(device.testStatus == TestStatus.PASS) {
+            if (committedSuccessfulDeviceIds.contains(device.deviceId)) {
+                statusLogger.info("[${device.deviceNum + 1}] Skipping, recently committed as ${device.deviceId}")
+                testerUi.setStatus(device.deviceNum, TestStatus.RETESTED)
+                return
+            }
+            committedSuccessfulDeviceIds.add(device.deviceId)
+            if (committedSuccessfulDeviceIds.size > 30)
+                committedSuccessfulDeviceIds.removeAt(0)
         }
-        committedSuccessfulDeviceIds.add(device.deviceId)
-        if(committedSuccessfulDeviceIds.size > 30)
-            committedSuccessfulDeviceIds.removeAt(0)
         for(db in testingDatabases) {
             val response = db.sendTestData(device)
             statusLogger.info("[${device.deviceNum + 1}] ${device.deviceId}: $response")
         }
-        try {
-            val fw = FileWriter("testedBoards.txt", true)
-            fw.append(device.deviceId).append('\n')
-            fw.close()
-        } catch(ex: IOException) {
-            statusLogger.info("Tested boards file write error: ${ex.message}")
+        if(device.testStatus == TestStatus.PASS) {
+            try {
+                val fw = FileWriter("testedBoards.txt", true)
+                fw.append(device.deviceId).append('\n')
+                fw.close()
+            } catch (ex: IOException) {
+                statusLogger.info("Tested boards file write error: ${ex.message}")
+            }
         }
     }
 
@@ -189,9 +193,10 @@ class Stage2TestingSuite(
         } else {
             val testIMU = SerialMatchingAction(
                 "Test IMU",
-                arrayOf(""".*Sensor 1 sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
+                arrayOf(""".*Sensor\[0] sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
                 arrayOf(
                     ".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
+                    ".*Sensor[0] didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)
                 ),
