@@ -86,7 +86,7 @@ fn main() {
 				logger.clone(),
 				options.clone(),
 			)) as Box<dyn TestExecutor>,
-			"auxboard" => Box::new(auxboard::AuxBoardTestExecutor::new(i2c, logger.clone()))
+			"auxboard" => Box::new(auxboard::AuxBoardTestExecutor::new(i2c, gpio, logger.clone()))
 				as Box<dyn TestExecutor>,
 			_ => {
 				{

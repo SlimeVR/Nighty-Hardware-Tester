@@ -4,6 +4,7 @@ use std::time;
 
 use bno080::{interface::i2c, wrapper};
 use rppal::i2c as rp_i2c;
+use rppal::gpio;
 
 use crate::api;
 use crate::logger;
@@ -17,11 +18,13 @@ pub struct AuxBoardTestExecutor {
 	bno: BNOInterface,
 	delay: rppal::hal::Delay,
 	logger: sync::Arc<sync::Mutex<logger::Logger>>,
+	int_pin: gpio::InputPin,
 }
 
 impl AuxBoardTestExecutor {
 	pub fn new(
 		i2c: rp_i2c::I2c,
+		gpio: gpio::Gpio,
 		logger: sync::Arc<sync::Mutex<logger::Logger>>,
 	) -> AuxBoardTestExecutor {
 		// TODO: switch out when testing extensions
@@ -29,8 +32,9 @@ impl AuxBoardTestExecutor {
 		let bno = wrapper::BNO080::new_with_interface(si);
 
 		let delay = rppal::hal::Delay::new();
+		let int_pin = gpio.get(17).unwrap().into_input_pullup();
 
-		AuxBoardTestExecutor { bno, delay, logger }
+		AuxBoardTestExecutor { bno, delay, logger, int_pin}
 	}
 }
 
@@ -52,6 +56,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let mut board = Board::new();
 		board.id = Some(uuid::Uuid::new_v4().to_string());
 
+		/*
 		{
 			let mut l = self.logger.lock().unwrap();
 			l.in_progress("Initializing BNO080...");
@@ -95,15 +100,18 @@ impl TestExecutor for AuxBoardTestExecutor {
 			}
 		}
 
+		thread::sleep(time::Duration::from_millis(500));
+		*/
+
 		{
 			let mut l = self.logger.lock().unwrap();
-			l.in_progress("Enabling rotation vector...");
+			l.in_progress("Enabling game rotation vector...");
 		}
 		let start = chrono::Utc::now();
-		match self.bno.enable_rotation_vector(5) {
+		match self.bno.enable_rotation_vector(5) { // TODO enable game rotation vector
 			Ok(_) => {
 				board.add_value(api::TestReportValue::new(
-					"Rotation vector",
+					"Game rotation vector",
 					"should be enableable",
 					"true",
 					None::<String>,
@@ -114,12 +122,12 @@ impl TestExecutor for AuxBoardTestExecutor {
 
 				{
 					let mut l = self.logger.lock().unwrap();
-					l.success("Rotation vector enabled successfully");
+					l.success("Game rotation vector enabled successfully");
 				}
 			}
 			Err(e) => {
 				board.add_value(api::TestReportValue::new(
-					"Rotation vector",
+					"Game rotation vector",
 					"should be enabled",
 					"false",
 					Some(format!("{:?}", e)),
@@ -131,7 +139,7 @@ impl TestExecutor for AuxBoardTestExecutor {
 
 				{
 					let mut l = self.logger.lock().unwrap();
-					l.error(&format!("Rotation vector failed to enable: {:?}", e));
+					l.error(&format!("Game rotation vector failed to enable: {:?}", e));
 				}
 
 				return crate::TestResult::Failed(board);
@@ -142,19 +150,55 @@ impl TestExecutor for AuxBoardTestExecutor {
 			let mut l = self.logger.lock().unwrap();
 			l.in_progress("Handling messages...");
 		}
-		let start = chrono::Utc::now();
-		thread::sleep(time::Duration::from_millis(500));
 
-		let processed_messages = self.bno.handle_all_messages(&mut self.delay, u8::MAX);
-		board.add_value(api::TestReportValue::new(
-			"Handling messages",
-			"should process messages",
-			processed_messages,
-			None::<String>,
-			false,
-			start,
-			chrono::Utc::now(),
-		));
+		let start = chrono::Utc::now();
+		let mut processed_messages = 0;
+		// Eat all and wait a bit
+		//self.bno.eat_all_messages(&mut self.delay);
+		//thread::sleep(time::Duration::from_millis(10));
+
+		let now = time::Instant::now();
+		while now.elapsed().as_millis() < 500
+		{
+			if self.int_pin.is_low()
+			{
+				processed_messages += self.bno.handle_one_message(&mut self.delay, 0);
+			}
+			thread::sleep(time::Duration::from_millis(1));
+		}
+		
+		if processed_messages > 0
+		{
+			board.add_value(api::TestReportValue::new(
+				"Handling messages",
+				"should process messages",
+				processed_messages,
+				None::<String>,
+				false,
+				start,
+				chrono::Utc::now(),
+			));
+		}
+		else
+		{
+			board.add_value(api::TestReportValue::new(
+				"Handling messages",
+				"should process messages",
+				"false",
+				None::<String>,
+				true,
+				start,
+				chrono::Utc::now(),
+			));
+			board.ended_at = chrono::Utc::now();
+
+			{
+				let mut l = self.logger.lock().unwrap();
+				l.error(&format!("Failed to read any messages"));
+			}
+
+			return crate::TestResult::Failed(board);
+		}
 
 		{
 			let mut l = self.logger.lock().unwrap();
@@ -166,6 +210,26 @@ impl TestExecutor for AuxBoardTestExecutor {
 		let start = chrono::Utc::now();
 		match self.bno.rotation_quaternion() {
 			Ok(q) => {
+				if q == [0.0, 0.0, 0.0, 0.0]
+				{
+					board.add_value(api::TestReportValue::new(
+						"Quaternion",
+						"should be valid",
+						"false",
+						Some(format!("{:?}", q)),
+						true,
+						start,
+						chrono::Utc::now(),
+					));
+					board.ended_at = chrono::Utc::now();
+	
+					{
+						let mut l = self.logger.lock().unwrap();
+						l.error(&format!("Quaternion is empty"));
+					}
+	
+					return crate::TestResult::Failed(board);
+				}
 				board.add_value(api::TestReportValue::new(
 					"Quaternion",
 					"should be valid",
