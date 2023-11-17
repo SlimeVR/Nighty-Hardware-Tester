@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["./tester"]
+members = ["./tester", "./updater"]
 
 [profile.release]
 lto = true

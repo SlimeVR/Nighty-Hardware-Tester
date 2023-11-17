@@ -1,4 +1,4 @@
 [toolchain]
 channel = "nightly"
-targets = ["aarch64-unknown-linux-gnu"]
-components = [ "rustfmt" ]
+targets = ["x86_64-pc-windows-msvc", "aarch64-unknown-linux-gnu"]
+components = ["rustfmt"]
