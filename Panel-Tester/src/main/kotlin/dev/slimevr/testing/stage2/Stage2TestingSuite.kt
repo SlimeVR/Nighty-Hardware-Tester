@@ -196,7 +196,7 @@ class Stage2TestingSuite(
                 arrayOf(""".*Sensor\[0] sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
                 arrayOf(
                     ".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
-                    ".*Sensor[0] didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
+                    ".*Sensor\\[0] didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)
                 ),
