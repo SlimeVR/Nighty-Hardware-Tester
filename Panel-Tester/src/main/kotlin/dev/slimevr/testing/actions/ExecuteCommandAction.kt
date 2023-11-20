@@ -2,6 +2,7 @@ package dev.slimevr.testing.actions
 
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
+import java.io.File
 import java.io.IOException
 import java.lang.StringBuilder
 import java.util.logging.Logger
@@ -17,7 +18,8 @@ class ExecuteCommandAction(
     successPatterns: Array<Regex>,
     failurePatterns: Array<Regex>,
     command: String,
-    private val timeout: Long
+    private val timeout: Long,
+    directory: File? = null
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
 
     private val logger: Logger = Logger.getLogger("ExecuteCommandAction")
@@ -25,7 +27,7 @@ class ExecuteCommandAction(
     private val processBuilder: ProcessBuilder =
         ProcessBuilder(command.split(" ")).redirectErrorStream(true).redirectOutput(
             ProcessBuilder.Redirect.PIPE
-        )
+        ).directory(directory ?: File(""))
 
     override fun action(testedValue: String, log: String, startTime: Long): TestResult {
         val fullLog = mutableListOf<String>()

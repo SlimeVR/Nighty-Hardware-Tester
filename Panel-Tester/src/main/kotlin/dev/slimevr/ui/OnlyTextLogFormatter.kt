@@ -17,7 +17,7 @@ class OnlyTextLogFormatter : Formatter() {
             localThrowable.printStackTrace(PrintWriter(localStringWriter))
             sb.append(localStringWriter)
         }
-        val message = sb.toString()
+        val message = sb.toString().replace("\t", "  ")
         val parameters = record.parameters
         if (parameters == null || parameters.isEmpty()) return message
         return if (message.contains("{0")

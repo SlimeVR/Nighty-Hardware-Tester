@@ -1,4 +1,4 @@
-package dev.slimevr.testing.stage2
+package dev.slimevr.testing.stage3
 
 import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
@@ -6,23 +6,29 @@ import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.DeviceTest
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
+import dev.slimevr.testing.actions.ExecuteCommandAction
 import dev.slimevr.testing.actions.SerialMatchingAction
 import dev.slimevr.testing.actions.SuccessAction
 import dev.slimevr.ui.stage2.Stage2UI
+import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
 import java.io.IOException
 import java.util.logging.Logger
 
-class Stage2TestingSuite(
+class Stage3Updater(
     private val testingDatabases: List<TestingDatabase>,
     private val testerUi: Stage2UI,
     private val logger: Logger,
-    private var statusLogger: Logger
-): Thread("Stage 2 testing suite thread") {
+    private val statusLogger: Logger,
+    private val wifiSSID: String,
+    private val wifiPass: String
+): Thread("Stage 3 updater thread") {
 
-    private val getTestCommandFailed = SuccessAction("GET TEST command")
-    private val firmwareVersionFailed = SuccessAction("Firmware version check")
+    private val getTestCommand = SuccessAction("GET TEST command")
+    private val factoryResetCommand = SuccessAction("FRST command")
+    private val setWiFiCommand = SuccessAction("SET WIFI command")
+    private val wifiConnectionParseFailed = SuccessAction("WiFi Connection parsing failed")
     private val serialManager = SerialManager()
 
     private var committedSuccessfulDeviceIds = mutableListOf<String>()
@@ -31,7 +37,7 @@ class Stage2TestingSuite(
 
     override fun run() {
         try {
-            val fw = FileReader("testedStage2Boards.txt")
+            val fw = FileReader("updatedStage3Boards.txt")
             fw.forEachLine {
                 committedSuccessfulDeviceIds.add(it)
                 if (committedSuccessfulDeviceIds.size > 30)
@@ -53,7 +59,7 @@ class Stage2TestingSuite(
                     sleep(5000)
                     continue
                 }
-                doTest(ports.first())
+                doUpdate(ports.first())
                 break
             }
             testerUi.statusLogHandler.clear()
@@ -64,7 +70,7 @@ class Stage2TestingSuite(
         }
     }
 
-    private fun doTest(port: SerialPort) {
+    private fun doUpdate(port: SerialPort) {
         statusLogger.info("Testing port ${port.systemPortPath}...")
         serialManager.markAsKnown(port)
         val device = DeviceTest(0)
@@ -72,13 +78,22 @@ class Stage2TestingSuite(
         if(serialManager.openPort(port, device)) {
             statusLogger.info("Port opened")
             //waitBootSequence(device)
-            testI2C(device)
             getTest(device)
-            testIMU(device)
+            if(!device.flashingRequired) {
+                logger.info("[${device.deviceNum + 1}] Already current version, flashing not required")
+            } else {
+                connectToWiFi(device)
+                waitWiFiConnection(device)
+                flashUpdate(device)
+                waitBootSequence(device)
+            }
+            factoryReset(device)
+            waitBootSequence(device)
             checkTestResults(device)
             commitTestResults(device)
             reportTestResults(device)
         } else {
+            testerUi.setStatus(0, TestStatus.ERROR)
             statusLogger.severe("Can't open port. Error ${port.lastErrorCode}")
             sleep(500L)
         }
@@ -146,64 +161,31 @@ class Stage2TestingSuite(
         }
     }
 
-    private fun waitBootSequence(device: DeviceTest) {
-        statusLogger.info("[${device.deviceNum + 1}] Waiting for boot...")
-        val startTime = System.currentTimeMillis()
-        val testI2C = SerialMatchingAction(
-            "Boot test",
-            arrayOf(
-                """\[INFO ] \[SlimeVR] SlimeVR .* starting up...""".toRegex()
-            ),
-            arrayOf(
-                "ERR".toRegex(),
-                "FATAL".toRegex()
-            ),
-            device,
-            30000
-        )
-        val result = testI2C.action("", "", startTime)
-        addResult(device, result)
+    private fun connectToWiFi(device: DeviceTest) {
+        if (device.testStatus == TestStatus.ERROR) {
+            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+        } else {
+            statusLogger.info("[${device.deviceNum + 1}] Connecting to WiFi $wifiSSID...")
+            val startTime = System.currentTimeMillis()
+            if (!device.sendSerialCommand("SET WIFI \"$wifiSSID\" \"$wifiPass\"")) {
+                val result = setWiFiCommand.action(false, "Serial command error", startTime)
+                addResult(device, result)
+            } else {
+                val result = setWiFiCommand.action(true, "Serial command sent", startTime)
+                addResult(device, result)
+            }
+        }
     }
 
-    private fun testI2C(device: DeviceTest) {
-        statusLogger.info("[${device.deviceNum + 1}] Testing I2C...")
-        val startTime = System.currentTimeMillis()
-        val testI2C = SerialMatchingAction(
-            "Test I2C",
-            arrayOf(
-                """\[INFO ] \[BNO080Sensor:0] Connected to BNO085 on 0x4a""".toRegex()
-            ),
-            arrayOf(
-                "ERR".toRegex(),
-                "FATAL".toRegex(),
-                "Connected to BNO085 on 0x4b".toRegex()
-            ),
-            device,
-            30000
-        )
-        val result = testI2C.action("", "", startTime)
-        addResult(device, result)
-    }
-
-    private fun testIMU(device: DeviceTest) {
-        statusLogger.info("[${device.deviceNum + 1}] Getting info...")
+    private fun factoryReset(device: DeviceTest) {
+        statusLogger.info("[${device.deviceNum + 1}] Factory reset...")
         val startTime = System.currentTimeMillis()
         if (device.testStatus == TestStatus.ERROR) {
             logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
-            val testIMU = SerialMatchingAction(
-                "Test IMU",
-                arrayOf(""".*Sensor\[0] sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
-                arrayOf(
-                    ".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
-                    ".*Sensor\\[0] didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
-                    ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
-                    ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)
-                ),
-                device,
-                15000
-            )
-            var result = testIMU.action("", "", startTime)
+            sleep(500)
+            val response = device.sendSerialCommand("FRST")
+            val result = getTestCommand.action(response, if (response) "Serial command success"  else "Serial command error", startTime)
             addResult(device, result)
         }
     }
@@ -216,7 +198,7 @@ class Stage2TestingSuite(
         } else {
             sleep(500)
             if (!device.sendSerialCommand("GET TEST")) {
-                val result = getTestCommandFailed.action(false, "Serial command error", startTime)
+                val result = getTestCommand.action(false, "Serial command error", startTime)
                 addResult(device, result)
             } else {
                 val getTestResult = SerialMatchingAction(
@@ -239,18 +221,96 @@ class Stage2TestingSuite(
                         .matchAt(result.endValue, 0)
                     if (match != null) {
                         statusLogger.info("[${device.deviceNum + 1}] Build: ${match.groupValues[1]}, mac: ${match.groupValues[2]}")
+                        device.deviceId = match.groupValues[2].lowercase()
+                        testerUi.setID(device.deviceNum, device.deviceId)
                         if (match.groupValues[1].toInt() == FIRMWARE_BUILD) {
-                            device.deviceId = match.groupValues[2].lowercase()
-                            testerUi.setID(device.deviceNum, device.deviceId)
                             device.flashingRequired = false
-                            return
                         }
                     }
-                    val result = firmwareVersionFailed.action(false, result.endValue, startTime)
-                    addResult(device, result)
                 }
             }
 
+        }
+    }
+
+    private fun flashUpdate(device: DeviceTest) {
+        if (device.testStatus == TestStatus.ERROR) {
+            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+        } else {
+            val startTime = System.currentTimeMillis()
+            statusLogger.info("[${device.deviceNum + 1}] Flashing...")
+            val flashAction = ExecuteCommandAction(
+                "Flash firmware", arrayOf(
+                    ".*`pio` exited with non-zero exit code.*".toRegex(RegexOption.IGNORE_CASE),
+                    ".*Result: OK.*".toRegex(RegexOption.IGNORE_CASE)
+                ), arrayOf(
+                    ".*Errno.*".toRegex(RegexOption.IGNORE_CASE),
+                    ".*error.*".toRegex(RegexOption.IGNORE_CASE)
+                ),
+                "pio run -t upload --upload-port ${device.ipAddress}", -1
+                , File("C:\\_work\\Git\\SlimeVR-Tracker-ESP")
+            )
+            val flashResult = flashAction.action("", "", startTime)
+            addResult(device, flashResult)
+        }
+    }
+
+    private fun waitBootSequence(device: DeviceTest) {
+        if (device.testStatus == TestStatus.ERROR) {
+            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+        } else {
+            statusLogger.info("[${device.deviceNum + 1}] Waiting for boot...")
+            val startTime = System.currentTimeMillis()
+            val testI2C = SerialMatchingAction(
+                "Boot test",
+                arrayOf(
+                    """\[INFO ] \[SlimeVR] SlimeVR .* starting up...""".toRegex()
+                ),
+                arrayOf(
+                    "ERR".toRegex(),
+                    "FATAL".toRegex()
+                ),
+                device,
+                30000
+            )
+            val result = testI2C.action("", "", startTime)
+            addResult(device, result)
+        }
+    }
+
+    private fun waitWiFiConnection(device: DeviceTest) {
+        if (device.testStatus == TestStatus.ERROR) {
+            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+        } else {
+            statusLogger.info("[${device.deviceNum + 1}] Waiting to connect to wifi...")
+            val startTime = System.currentTimeMillis()
+            val testI2C = SerialMatchingAction(
+                "WiFi Connected",
+                arrayOf(
+                    """\[INFO ] \[WiFiHandler] Connected successfully to SSID .*""".toRegex()
+                ),
+                arrayOf(
+                    "ERR".toRegex(),
+                    "FATAL".toRegex(),
+                    "\"Can't connect".toRegex()
+                ),
+                device,
+                30000
+            )
+            val result = testI2C.action("", "", startTime)
+            addResult(device, result)
+            if (result.status == TestStatus.PASS) {
+                statusLogger.info("[${device.deviceNum + 1}] Connected: ${result.endValue}")
+                val match = """.*SSID '([^']+)', ip address ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)""".toRegex()
+                    .matchAt(result.endValue, 0)
+                if (match != null) {
+                    statusLogger.info("[${device.deviceNum + 1}] SSID: ${match.groupValues[1]}, IP: ${match.groupValues[2]}")
+                    device.ipAddress = match.groupValues[2]
+                    return
+                }
+                val result = wifiConnectionParseFailed.action(false, result.endValue, startTime)
+                addResult(device, result)
+            }
         }
     }
 

@@ -22,10 +22,10 @@ class LabelLogHandler(
 
     @Synchronized
     private fun addLines(lines: List<String>) {
-        while(allLines.size + lines.size > maxLines) {
+        allLines.addAll(lines)
+        while(allLines.size > maxLines) {
             allLines.removeAt(0)
         }
-        allLines.addAll(lines)
         updatePanel()
     }
 

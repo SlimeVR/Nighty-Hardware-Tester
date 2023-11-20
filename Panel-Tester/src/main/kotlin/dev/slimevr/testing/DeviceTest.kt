@@ -25,6 +25,7 @@ class DeviceTest(
     val serialLog = mutableListOf<String>()
     var serialDisconnected = false
     var serialLogRead = 0
+    var ipAddress: String? = null
 
     /**
      * If the device test should be saved to the database

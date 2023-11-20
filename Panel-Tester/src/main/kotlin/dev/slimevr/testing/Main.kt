@@ -8,6 +8,7 @@ import com.pi4j.io.i2c.I2CProvider
 import dev.slimevr.database.RemoteTestingDatabase
 import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.stage2.Stage2TestingSuite
+import dev.slimevr.testing.stage3.Stage3Updater
 import dev.slimevr.ui.TesterUI
 import dev.slimevr.ui.stage2.Stage2UI
 import java.io.File
@@ -49,6 +50,11 @@ fun main(args: Array<String>) {
         val testerUI = Stage2UI(globalLogger, statusLogger, devicesLogger)
         sleep(500)
         val suite = Stage2TestingSuite(listOf(database), testerUI, globalLogger, statusLogger)
+        suite.start()
+    } else if(stage == 3) {
+        val testerUI = Stage2UI(globalLogger, statusLogger, devicesLogger)
+        sleep(500)
+        val suite = Stage3Updater(listOf(database), testerUI, globalLogger, statusLogger, System.getenv("UPDATER_WIFI_SSID"), System.getenv("UPDATER_WIFI_PASS"))
         suite.start()
     } else {
         pi4j = Pi4J.newAutoContext()
