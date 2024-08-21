@@ -7,9 +7,9 @@ uint8_t portExclude[] = {LED_PIN};
 String portMap[] = {"D0", "D1", "D2", "D4", "D5", "D6", "D7"};
 // ESP32C3 has not as many ports as the ESP32
 #elif defined(ESP32C3)
-uint8_t portArray[] = {2, 3, 4, 5, 6, 7, 8, 9, 10};
+uint8_t portArray[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 uint8_t portExclude[] = {18, 19, 20, 21, LED_PIN};
-String portMap[] = {"2", "3", "4", "5", "6", "7", "8", "9", "10"};
+String portMap[] = {"0", "1", "2", "3", "4", "5", "6", "7" "8", "9", "10", "12", "16", "18", "19", "20", "21", "22", "23"};
 #elif defined(ESP32)
 uint8_t portArray[] = {4, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33};
 String portMap[] = {"4", "13", "14", "15", "16", "17", "18", "19", "21", "22", "23", "25", "26", "27", "32", "33"};
@@ -43,6 +43,7 @@ namespace I2CSCAN
             {
                 if ((i != j) && !inArray(portArray[i], portExclude, sizeof(portExclude)) && !inArray(portArray[j], portExclude, sizeof(portExclude)))
                 {
+                    Serial.printf("[I2CSCAN] Scanning %d : %d\n", portArray[i], portArray[j]);
                     if(checkI2C(i, j))
                         found = true;
                 }

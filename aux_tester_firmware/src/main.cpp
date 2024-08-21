@@ -26,22 +26,61 @@
 #include <i2cscan.h>
 #include "logging/Logger.h"
 #include "sensors/bno080sensor.h"
+#include <Adafruit_MCP23X17.h>
+#include "PCA9547.h"
+
+#define IMU_TIMEOUT 300
+#define INT_PIN 10
+#define PCAADDR 0x70
+#define BUTTON_PIN 1
+#define I2C_SDA 1
+#define I2C_SCL 0
 
 SlimeVR::Logging::Logger logger("SlimeVR");
 
-unsigned long loopTime;
-enum TestState {
-    IMU_NOT_CONNECTED,
-    IMU_WAITING_RESPONSE,
-    IMU_WAITING_DISCONNECT
-};
-TestState state = TestState::IMU_NOT_CONNECTED;
-Sensor *m_Sensor1;
 unsigned long imuConnected;
+Sensor *m_Sensor1;
 int8_t foundIMUAddr = -1;
+Adafruit_MCP23X17 mcp;
+
+struct ImuTestSettings {
+    bool i2cSelectEnabled;
+    uint8_t i2cSelectChannel;
+    uint8_t i2cAddress;
+    uint8_t intPinGP;
+};
+
+ImuTestSettings imus[] = {
+    {false, 0, 0x4a ^ 0x02, 6},
+    {false, 0, 0x4b ^ 0x02, 7},
+    {true, 0, 0x4a, 8},
+    {true, 0, 0x4b, 9},
+    {true, 1, 0x4a, 10},
+    {true, 1, 0x4b, 11},
+    {true, 2, 0x4a, 12},
+    {true, 2, 0x4b, 13},
+    {true, 3, 0x4a, 14},
+    {true, 3, 0x4b, 15},
+};
+
+uint8_t i2cSelectorChannel(uint8_t ch) {
+    if (ch > 3)
+        return 255U;
+    Wire.beginTransmission(PCAADDR);
+    Wire.write(1 << ch);
+    return Wire.endTransmission();
+}
+
+
+uint8_t i2cSelectorDisable() {
+    Wire.beginTransmission(PCAADDR);
+    Wire.write(0);
+    return Wire.endTransmission();
+}
 
 void setup()
 {
+    delay(5000);
     Serial.begin(serialBaudRate);
 
     Serial.println();
@@ -50,128 +89,142 @@ void setup()
 
     logger.info("SlimeVR Extension Tester v" FIRMWARE_VERSION " starting up...");
 
-    Wire.begin(static_cast<int>(PIN_IMU_SDA), static_cast<int>(PIN_IMU_SCL)); 
+    I2CSCAN::clearBus(I2C_SDA, I2C_SCL); // Make sure the bus isn't stuck when resetting ESP without powering it down
+    // Fixes I2C issues for certain IMUs. Previously this feature was enabled for selected IMUs, now it's enabled for all.
+    // If some IMU turned out to be broken by this, check needs to be re-added.
+
+    // join I2C bus
+#if ESP32
+    // For some unknown reason the I2C seem to be open on ESP32-C3 by default. Let's just close it before opening it again. (The ESP32-C3 only has 1 I2C.)
+    Wire.end();
+#endif
+    Wire.begin(I2C_SDA, I2C_SCL); 
 
 #ifdef ESP8266
     Wire.setClockStretchLimit(150000L); // Default stretch limit 150mS
 #endif
 #ifdef ESP32 // Counterpart on ESP32 to ClockStretchLimit
-    Wire.setTimeOut(150);
+    //Wire.setTimeOut(150);
 #endif
     Wire.setClock(I2C_SPEED);
 
-    logger.info("Waiting for first device...");
-    loopTime = millis();
+    if (!mcp.begin_I2C()) {
+        while (1) {
+            logger.error("MCP initialization error.");
+            I2CSCAN::scani2cports();
+            delay(1000);
+        }
+    }
+
+    pinMode(INT_PIN, INPUT);
+    mcp.setupInterrupts(true, false, LOW);
+
+    logger.info("Boot complete, awaiting button interrupt at A1");
 }
 
-#define BNO_EXT_WRONG_ADDRESS 0x4a
-#define BNO_EXT_ADDRESS 0x4b
-#define IMU_TIMEOUT 300
-
-void printPass() {
-    Serial.print("\033[32;42m  _____           _____  _____                         \n"
-                " |  __ \\  /\\     / ____|/ ____|                      \n"
-                " | |__) |/  \\   | (___ | (___                         \n"  
-                " |  ___// /\\ \\   \\___ \\ \\___ \\                   \n" 
-                " | |   / ____ \\  ____) |____) |                       \n"
-                " |_|  /_/    \\_\\|_____/|_____/                       \033[0m\n");
+void printPass(uint8_t boardId = 0) {
+    Serial.printf("[%d] \033[32;42mPASS[0m\n", boardId);
 }
 
-void printFail() {
-    Serial.print("\033[31;41m  ______        _____  _                               \n"      
-                " |  ____|/\\    |_   _|| |                             \n"     
-                " | |__  /  \\     | |  | |                             \n"     
-                " |  __|/ /\\ \\    | |  | |                            \n"     
-                " | |  / ____ \\  _| |_ | |____                         \n" 
-                " |_| /_/    \\_\\|_____||______|                       \033[0m\n");
+void printFail(uint8_t boardId = 0) {
+    Serial.printf("[%d] \033[31;41mFAIL[0m\n", boardId);
 }
 
 void loop()
 {
-    switch(state)
+    bool testFailed = false;
+    // enable interrupt on button_pin
+    mcp.setupInterruptPin(BUTTON_PIN, LOW);
+    mcp.pinMode(BUTTON_PIN, INPUT_PULLUP);
+    if (!digitalRead(INT_PIN))
     {
-        case IMU_NOT_CONNECTED:
-            if(I2CSCAN::isI2CExist(BNO_EXT_ADDRESS))
+        logger.info("Interrupt detected on pin %d", mcp.getLastInterruptPin());
+        if(!mcp.digitalRead(BUTTON_PIN))
+        {
+            mcp.disableInterruptPin(BUTTON_PIN);
+            logger.info("Button pressed");
+            delay(250);  // debounce
+            mcp.clearInterrupts();  // clear
+            logger.info("Scanning BNO085s...");
+            for(uint8_t i = 0; i < 10; i++)
             {
-                foundIMUAddr = BNO_EXT_ADDRESS;
-                logger.info("Found I2C device on 0x%02x", BNO_EXT_ADDRESS);
-                delay(500); // Wait for it to boot
-                m_Sensor1 = new BNO080Sensor(0, IMU, BNO_EXT_ADDRESS, IMU_ROTATION, PIN_IMU_INT_2);
-                m_Sensor1->motionSetup();
-                if(!m_Sensor1->isWorking())
+                bool imuFailed = false;
+                ImuTestSettings test = imus[i];
+                logger.info("[%d] Scanning: %s %d %d %d", i, (test.i2cSelectEnabled ? "true" : "false"), test.i2cSelectChannel, test.i2cAddress, test.intPinGP);
+                mcp.setupInterruptPin(test.intPinGP, LOW);
+                if(test.i2cSelectEnabled)
                 {
-                    logger.fatal("Initialization failed.");
-                    logger.fatal("Test failed!");
-                    printFail();
-                    logger.info("Waiting until device disconnected");
-                    state = IMU_WAITING_DISCONNECT;
+                    i2cSelectorChannel(test.i2cSelectChannel);
                 }
                 else
                 {
-                    state = IMU_WAITING_RESPONSE;
-                    logger.info("Waiting for response from the IMU");
-                    imuConnected = millis();
+                    i2cSelectorDisable();
                 }
-            }
-            foundIMUAddr = I2CSCAN::findI2CAddr();
-            if(foundIMUAddr > 0 && foundIMUAddr != BNO_EXT_ADDRESS)
-            {
-                if(foundIMUAddr == BNO_EXT_WRONG_ADDRESS) {
-                    logger.fatal("Found I2C device on wrong address 0x%02x", foundIMUAddr);
-                    logger.fatal("Test failed!");
-                    printFail();
-                    logger.info("Waiting until device disconnected");
-                    state = IMU_WAITING_DISCONNECT;
+                Wire.end();
+                Wire.begin(I2C_SDA, I2C_SCL);
+                if(I2CSCAN::isI2CExist(test.i2cAddress))
+                {
+                    logger.info("[%d] I2C Found", i);
+                    m_Sensor1 = new BNO080Sensor(i, IMU, test.i2cAddress, IMU_ROTATION, INT_PIN);
+                    m_Sensor1->motionSetup();
+                    if(!m_Sensor1->isWorking())
+                    {
+                        logger.fatal("[%d] Initialization failed.", i);
+                        logger.fatal("[%d] Test failed!", i);
+                        testFailed = true;
+                        imuFailed = true;
+                    }
+                    else
+                    {
+                        logger.info("[%d] Waiting for response from the IMU", i);
+                        imuConnected = millis();
+                    }
                 }
-                // For other addresses, just continue looking
+                else
+                {
+                    logger.fatal("[%d] I2C not found.", i);
+                    logger.fatal("[%d] Test failed!", i);
+                    testFailed = true;
+                    imuFailed = true;
+                }
+                while(!imuFailed)
+                {
+                    m_Sensor1->motionLoop();
+                    if(m_Sensor1->isWorking() && m_Sensor1->hadData)
+                    {
+                        logger.info(
+                            "[%d] Sensor: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
+                            i,
+                            getIMUNameByType(m_Sensor1->getSensorType()),
+                            UNPACK_QUATERNION(m_Sensor1->getQuaternion()),
+                            m_Sensor1->isWorking() ? "true" : "false",
+                            m_Sensor1->hadData ? "true" : "false"
+                        );
+                        logger.info("[%d] Test passed!", i);
+                        break;
+                    }
+                    else if(millis() - imuConnected > IMU_TIMEOUT)
+                    {
+                        logger.info(
+                            "[%d] Sensor: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
+                            i,
+                            getIMUNameByType(m_Sensor1->getSensorType()),
+                            UNPACK_QUATERNION(m_Sensor1->getQuaternion()),
+                            m_Sensor1->isWorking() ? "true" : "false",
+                            m_Sensor1->hadData ? "true" : "false"
+                        );
+                        logger.info("[%d] Test failed by timeout", i);
+                        testFailed = true;
+                        imuFailed = true;
+                        break;
+                    }
+                    delay(10);
+                }
+                mcp.disableInterruptPin(test.intPinGP);
+                delay(100);
             }
-            break;
-        case IMU_WAITING_RESPONSE:
-            m_Sensor1->motionLoop();
-            if(m_Sensor1->isWorking() && m_Sensor1->hadData)
-            {
-                logger.info(
-                    "Sensor: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
-                    getIMUNameByType(m_Sensor1->getSensorType()),
-                    UNPACK_QUATERNION(m_Sensor1->getQuaternion()),
-                    m_Sensor1->isWorking() ? "true" : "false",
-                    m_Sensor1->hadData ? "true" : "false"
-                );
-                logger.info("Test passed!");
-                printPass();
-                logger.info("Waiting until device disconnected");
-                state = IMU_WAITING_DISCONNECT;
-            }
-            else if(millis() - imuConnected > IMU_TIMEOUT)
-            {
-                logger.info(
-                    "Sensor: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
-                    getIMUNameByType(m_Sensor1->getSensorType()),
-                    UNPACK_QUATERNION(m_Sensor1->getQuaternion()),
-                    m_Sensor1->isWorking() ? "true" : "false",
-                    m_Sensor1->hadData ? "true" : "false"
-                );
-                logger.info("Test failed by timeout");
-                printFail();
-                logger.info("Waiting until device disconnected");
-                state = IMU_WAITING_DISCONNECT;
-            }
-            break;
-        case IMU_WAITING_DISCONNECT:
-            if(!I2CSCAN::isI2CExist(foundIMUAddr))
-            {
-                foundIMUAddr = -1;
-                state = IMU_NOT_CONNECTED;
-                logger.info("Device disconnected. Connect next device.");
-                delay(500);
-            }
-        break;
+        }
     }
-
-    unsigned long time = millis();
-    if(time - loopTime < 10)
-    {
-        delay(10 - (time - loopTime));
-    }
-    loopTime = time;
+    delay(1000);
+    logger.info("Awaiting interrupts...");
 }
