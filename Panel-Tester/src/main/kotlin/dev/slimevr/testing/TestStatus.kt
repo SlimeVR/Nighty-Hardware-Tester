@@ -9,6 +9,8 @@ enum class TestStatus(
     TESTING(TextColor.ANSI.YELLOW),
     ERROR(TextColor.ANSI.RED_BRIGHT),
     PASS(TextColor.ANSI.GREEN_BRIGHT),
-    RETESTED(TextColor.ANSI.BLUE_BRIGHT)
+    RETESTED(TextColor.ANSI.BLUE_BRIGHT),
+    PORT_ERROR(TextColor.ANSI.CYAN_BRIGHT),
+    NOT_UPDATED(TextColor.ANSI.MAGENTA_BRIGHT)
 
 }

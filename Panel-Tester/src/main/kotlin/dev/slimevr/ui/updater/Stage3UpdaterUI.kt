@@ -1,4 +1,4 @@
-package dev.slimevr.ui.stage2
+package dev.slimevr.ui.updater
 
 import com.googlecode.lanterna.TerminalSize
 import com.googlecode.lanterna.TextColor
@@ -14,14 +14,14 @@ import dev.slimevr.testing.destroy
 import dev.slimevr.ui.*
 import java.util.logging.Logger
 
-class Stage2UI (
+class Stage3UpdaterUI (
     globalLogger: Logger,
-    statusLogger: Logger
+    deviceLoggers: Array<Logger?>
 ) {
     val fullLogHandler: LabelLogHandler
-    val statusLogHandler: LabelLogHandler
     val testedDevicesUI = mutableListOf<TestingDeviceUI>()
     val window = BasicWindow()
+
     init {
         LogManager.removeNonFileHandlers()
         // Setup terminal and screen layers
@@ -36,58 +36,51 @@ class Stage2UI (
         // Create panel to hold components
 
         val mainPanel = Panel()
-        mainPanel.setLayoutManager(GridLayout(5))
+        mainPanel.setLayoutManager(GridLayout(deviceLoggers.size / 2))
 
-        val logLabel = SlimyLabel("")
-        logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
-        logLabel.size = TerminalSize(30, 35)
-        fullLogHandler = LabelLogHandler(logLabel, 100)
-        fullLogHandler.formatter = LabelLogFormatter()
-        globalLogger.addHandler(fullLogHandler)
-        mainPanel.addComponent(
-            logLabel.withBorder(Borders.singleLine("Log")),
-            GridLayout.createLayoutData(
-                GridLayout.Alignment.FILL,
-                GridLayout.Alignment.FILL, true,
-                false, 4, 2)
-        )
-
-        val statusLabel = SlimyLabel("")
-        statusLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
-        statusLabel.size = TerminalSize(10, 35)
-        statusLogHandler = LabelLogHandler(statusLabel, 100)
-        statusLogHandler.formatter = OnlyTextLogFormatter()
-        statusLogger.addHandler(statusLogHandler)
-        statusLogger.useParentHandlers = false
-        mainPanel.addComponent(
-            statusLabel.withBorder(Borders.singleLine("Status")),
-            GridLayout.createLayoutData(
-                GridLayout.Alignment.FILL,
-                GridLayout.Alignment.FILL, false,
-                true, 1, 1)
-        )
-
-        for (i in 1..1) {
+        for (i in 1..deviceLoggers.size) {
             val testerPanel = Panel()
-            testerPanel.size = TerminalSize(10, 7)
-            val statusColorPanel = EmptySpace(
-                TestStatus.DISCONNECTED.color,
-                TerminalSize(1, 5)
-            )
+            val statusColorPanel = EmptySpace(TestStatus.DISCONNECTED.color,
+                TerminalSize(1, 1))
             val idLabel = Label("Board $i")
             testerPanel.setLayoutManager(GridLayout(1))
             testerPanel.addComponent(statusColorPanel, GridLayout.createHorizontallyFilledLayoutData())
             testerPanel.addComponent(idLabel, GridLayout.createHorizontallyFilledLayoutData())
             val usbLabel = Label("")
             testerPanel.addComponent(usbLabel, GridLayout.createHorizontallyFilledLayoutData())
+
+            val logLabel = SlimyLabel("")
+            logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
+            val deviceLogHandler = LabelLogHandler(logLabel, 20)
+            deviceLogHandler.formatter = LabelLogFormatter()
+            deviceLoggers[i-1]?.addHandler(deviceLogHandler)
+            deviceLoggers[i-1]?.useParentHandlers = false
+            logLabel.setSize(TerminalSize(20, 20))
+
+            testerPanel.addComponent(logLabel, GridLayout.createHorizontallyFilledLayoutData())
+
             mainPanel.addComponent(
                 testerPanel.withBorder(Borders.singleLine("Board $i")),
-                GridLayout.createHorizontallyFilledLayoutData()
+                GridLayout.createLayoutData(GridLayout.Alignment.FILL,
+                    GridLayout.Alignment.FILL, true,
+                    true, 1, 1)
             )
 
-            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel, usbLabel)
+            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel, usbLabel, logLabel)
             testedDevicesUI.add(deviceUI)
         }
+        val logLabel = SlimyLabel("")
+        logLabel.setSize(TerminalSize(20, 10))
+        logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
+        fullLogHandler = LabelLogHandler(logLabel, 20)
+        fullLogHandler.formatter = LabelLogFormatter()
+        globalLogger.addHandler(fullLogHandler)
+        mainPanel.addComponent(
+            logLabel.withBorder(Borders.singleLine("Log")),
+            GridLayout.createLayoutData(GridLayout.Alignment.FILL,
+                GridLayout.Alignment.FILL, true,
+                true, deviceLoggers.size / 2, 1)
+        )
 
         window.component = mainPanel
         // Create gui and start gui
@@ -104,5 +97,12 @@ class Stage2UI (
 
     fun setID(device: Int, id: String) {
         testedDevicesUI[device].idLabel.text = id
+    }
+
+    fun clear(device: Int) {
+        testedDevicesUI[device].idLabel.text = "Device ${device+1}"
+        testedDevicesUI[device].statusColorPanel.color = TestStatus.DISCONNECTED.color
+        testedDevicesUI[device].logLabel?.text = ""
+        // todo : clear log
     }
 }

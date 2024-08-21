@@ -79,6 +79,7 @@ class Stage2TestingSuite(
             commitTestResults(device)
             reportTestResults(device)
         } else {
+            testerUi.setStatus(0, TestStatus.PORT_ERROR)
             statusLogger.severe("Can't open port. Error ${port.lastErrorCode}")
             sleep(500L)
         }

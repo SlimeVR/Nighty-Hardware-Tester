@@ -11,10 +11,9 @@ import java.util.logging.Logger
 
 
 class DeviceTest(
-    var deviceNum: Int
-): SerialPortMessageListener {
-
+    var deviceNum: Int,
     val logger: Logger = Logger.getLogger("devices")
+): SerialPortMessageListener {
 
     var deviceId = ""
     var testStatus = TestStatus.TESTING

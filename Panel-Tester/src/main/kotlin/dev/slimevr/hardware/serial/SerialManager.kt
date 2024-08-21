@@ -7,6 +7,7 @@ class SerialManager {
 
     private val knownPorts = mutableListOf<SerialPort>()
 
+    @Synchronized
     fun findNewPorts(): List<SerialPort> {
         return SerialPort.getCommPorts().filter { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } == 0) and isValidPort(it) }
     }
@@ -21,21 +22,33 @@ class SerialManager {
         }
         return false
     }
-
+    @Synchronized
     fun markAsKnown(port: SerialPort) {
         knownPorts.add(port)
     }
 
+    @Synchronized
     fun areKnownPortsConnected(): Boolean {
         return SerialPort.getCommPorts()
             .any { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } > 0) }
     }
+
+    fun isPortConnected(port: SerialPort): Boolean {
+        return SerialPort.getCommPorts().any { port.systemPortPath.equals(it.systemPortPath) }
+    }
+
 
     fun closePort(port: SerialPort) {
         port.closePort()
         port.removeDataListener()
     }
 
+    @Synchronized
+    fun removePort(port: SerialPort) {
+        knownPorts.remove(port)
+    }
+
+    @Synchronized
     fun closeAllPorts() {
         knownPorts.forEach { closePort(it) }
         knownPorts.clear()

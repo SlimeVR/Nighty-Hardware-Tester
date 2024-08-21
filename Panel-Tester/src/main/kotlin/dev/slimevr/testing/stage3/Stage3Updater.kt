@@ -10,6 +10,7 @@ import dev.slimevr.testing.actions.ExecuteCommandAction
 import dev.slimevr.testing.actions.SerialMatchingAction
 import dev.slimevr.testing.actions.SuccessAction
 import dev.slimevr.ui.stage2.Stage2UI
+import dev.slimevr.ui.updater.Stage3UpdaterUI
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
@@ -18,9 +19,9 @@ import java.util.logging.Logger
 
 class Stage3Updater(
     private val testingDatabases: List<TestingDatabase>,
-    private val testerUi: Stage2UI,
+    private val testerUi: Stage3UpdaterUI,
     private val logger: Logger,
-    private val statusLogger: Logger,
+    private val deviceLoggers: Array<Logger?>,
     private val wifiSSID: String,
     private val wifiPass: String
 ): Thread("Stage 3 updater thread") {
@@ -35,6 +36,8 @@ class Stage3Updater(
 
     private val FIRMWARE_BUILD = 17
 
+    private val emptyDevices = BooleanArray(deviceLoggers.size) { true }
+
     override fun run() {
         try {
             val fw = FileReader("updatedStage3Boards.txt")
@@ -43,44 +46,59 @@ class Stage3Updater(
                 if (committedSuccessfulDeviceIds.size > 30)
                     committedSuccessfulDeviceIds.removeAt(0)
             }
-            statusLogger.info("Loaded ${committedSuccessfulDeviceIds.size} old boards")
+            logger.info("Loaded ${committedSuccessfulDeviceIds.size} old boards")
         } catch (ex: IOException) {
-            statusLogger.info("Old boards not loaded (${ex.message})")
+            logger.info("Old boards not loaded (${ex.message})")
         }
+        logger.info("Ready, connect devices")
+
         while(true) {
-            statusLogger.info("Waiting for the next device to connect...")
-            while(true) {
-                val ports = serialManager.findNewPorts()
-                if(ports.isEmpty()) {
-                    sleep(10)
-                    continue
-                } else if(ports.size > 1) {
-                    statusLogger.severe("More than 1 port connected: ${ports.joinToString()}")
-                    sleep(5000)
-                    continue
-                }
-                doUpdate(ports.first())
-                break
+            sleep(25)
+            val ports = serialManager.findNewPorts()
+            if (ports.isEmpty()) {
+                continue
             }
-            testerUi.statusLogHandler.clear()
-            testerUi.fullLogHandler.clear()
-            testerUi.setID(0, "")
-            testerUi.setStatus(0, TestStatus.DISCONNECTED)
-            sleep(500)
+            ports.forEach { p ->
+                serialManager.markAsKnown(p)
+                Thread {
+                    doUpdate(p)
+                }.start()
+            }
         }
     }
 
+    private fun portToDeviceNum(port: SerialPort): Int {
+        // for windows we just pick first empty device
+        for (i in emptyDevices.indices) {
+            if(emptyDevices[i]) {
+                emptyDevices[i] = false
+                return i
+            }
+        }
+        return -1
+    }
+
+    private fun releaseDevice(port: SerialPort, deviceNum: Int) {
+        emptyDevices[deviceNum] = true
+    }
+
     private fun doUpdate(port: SerialPort) {
-        statusLogger.info("Testing port ${port.systemPortPath}...")
-        serialManager.markAsKnown(port)
-        val device = DeviceTest(0)
+        val deviceNum = portToDeviceNum(port)
+        if(deviceNum < 0) {
+            serialManager.removePort(port)
+            logger.severe("Can't map port to a device: ${port.systemPortPath}")
+            return
+        }
+        logger.info("Device ${deviceNum + 1} connected to ${port.systemPortPath}")
+        deviceLoggers[deviceNum]?.info("[${deviceNum + 1}] Updating on port ${port.systemPortPath}...")
+        val device = DeviceTest(deviceNum, deviceLoggers[deviceNum] ?: Logger.getLogger("devices"))
         device.serialPort = port
         if(serialManager.openPort(port, device)) {
-            statusLogger.info("Port opened")
+            deviceLoggers[deviceNum]?.info("Port opened")
             //waitBootSequence(device)
             getTest(device)
             if(!device.flashingRequired) {
-                logger.info("[${device.deviceNum + 1}] Already current version, flashing not required")
+                deviceLoggers[deviceNum]?.info("[${device.deviceNum + 1}] Already current version, flashing not required")
             } else {
                 connectToWiFi(device)
                 waitWiFiConnection(device)
@@ -89,19 +107,27 @@ class Stage3Updater(
             }
             factoryReset(device)
             waitBootSequence(device)
+            if(device.deviceId == "*****" || device.deviceId.isBlank()) {
+                getTest(device, true)
+            }
             checkTestResults(device)
             commitTestResults(device)
             reportTestResults(device)
         } else {
-            testerUi.setStatus(0, TestStatus.ERROR)
-            statusLogger.severe("Can't open port. Error ${port.lastErrorCode}")
+            testerUi.setStatus(deviceNum, TestStatus.PORT_ERROR)
+            deviceLoggers[deviceNum]?.severe("[${device.deviceNum + 1}] Can't open port. Error ${port.lastErrorCode}")
             sleep(500L)
         }
-        statusLogger.info("Testing finished, disconnect the device!")
-        while(serialManager.areKnownPortsConnected()) {
-            sleep(10)
+        deviceLoggers[deviceNum]?.info("[${device.deviceNum + 1}] Update finished, disconnect the device!")
+        logger.info("[${device.deviceNum + 1}] Update finished, disconnect the device!")
+        while(!device.serialDisconnected && serialManager.isPortConnected(port)) {//while(!device.serialDisconnected && serialManager.areKnownPortsConnected()) {
+            sleep(25)
         }
-        serialManager.closeAllPorts()
+        port.closePort()
+        serialManager.removePort(port)
+        releaseDevice(port, deviceNum)
+        testerUi.clear(deviceNum)
+        logger.info("[${device.deviceNum + 1}] Device disconnected, ready for the next!")
     }
 
     private fun checkTestResults(device: DeviceTest): Boolean {
@@ -109,36 +135,37 @@ class Stage3Updater(
         device.endTime = System.currentTimeMillis()
         if (device.testStatus == TestStatus.ERROR) {
             failed = true
+        } else if(!device.flashingRequired) {
+            testerUi.setStatus(device.deviceNum, TestStatus.NOT_UPDATED)
         } else {
             device.testStatus = TestStatus.PASS
             testerUi.setStatus(device.deviceNum, TestStatus.PASS)
         }
-        device.serialPort?.let { serialManager.closePort(it) }
         return failed
     }
 
     private fun reportTestResults(device: DeviceTest) {
         if (device.testStatus == TestStatus.ERROR) {
-            statusLogger.severe("[${device.deviceNum + 1}] ${device.deviceId}: Test failed")
+            deviceLoggers[device.deviceNum]?.severe("[${device.deviceNum + 1}] ${device.deviceId}: Test failed")
             for (test in device.testsList) {
                 if (test.status == TestStatus.ERROR) {
-                    statusLogger.severe(test.toString() + "\n" + test.log)
+                    deviceLoggers[device.deviceNum]?.severe(test.toString() + "\n" + test.log)
                 }
             }
         } else {
-            statusLogger.severe("[${device.deviceNum + 1}] ${device.deviceId}: Test success")
+            deviceLoggers[device.deviceNum]?.severe("[${device.deviceNum + 1}] ${device.deviceId}: Test success")
         }
     }
 
     private fun commitTestResults(device: DeviceTest) {
-        statusLogger.info("Committing the test results to database...")
+        deviceLoggers[device.deviceNum]?.info("Committing the test results to database...")
         if(device.deviceId.isBlank()) {
-            statusLogger.info("[${device.deviceNum + 1}] Skipping, no ID")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Skipping, no ID")
             return
         }
         if(device.testStatus == TestStatus.PASS) {
             if (committedSuccessfulDeviceIds.contains(device.deviceId)) {
-                statusLogger.info("[${device.deviceNum + 1}] Skipping, recently committed as ${device.deviceId}")
+                deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Skipping, recently committed as ${device.deviceId}")
                 testerUi.setStatus(device.deviceNum, TestStatus.RETESTED)
                 return
             }
@@ -148,24 +175,24 @@ class Stage3Updater(
         }
         for(db in testingDatabases) {
             val response = db.sendTestData(device)
-            statusLogger.info("[${device.deviceNum + 1}] ${device.deviceId}: $response")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] ${device.deviceId}: $response")
         }
         if(device.testStatus == TestStatus.PASS) {
             try {
-                val fw = FileWriter("testedBoards.txt", true)
+                val fw = FileWriter("updatedStage3Boards.txt", true)
                 fw.append(device.deviceId).append('\n')
                 fw.close()
             } catch (ex: IOException) {
-                statusLogger.info("Tested boards file write error: ${ex.message}")
+                deviceLoggers[device.deviceNum]?.info("Tested boards file write error: ${ex.message}")
             }
         }
     }
 
     private fun connectToWiFi(device: DeviceTest) {
         if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+            deviceLoggers[device.deviceNum]?.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
-            statusLogger.info("[${device.deviceNum + 1}] Connecting to WiFi $wifiSSID...")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Connecting to WiFi $wifiSSID...")
             val startTime = System.currentTimeMillis()
             if (!device.sendSerialCommand("SET WIFI \"$wifiSSID\" \"$wifiPass\"")) {
                 val result = setWiFiCommand.action(false, "Serial command error", startTime)
@@ -178,23 +205,23 @@ class Stage3Updater(
     }
 
     private fun factoryReset(device: DeviceTest) {
-        statusLogger.info("[${device.deviceNum + 1}] Factory reset...")
+        deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Factory reset...")
         val startTime = System.currentTimeMillis()
         if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+            deviceLoggers[device.deviceNum]?.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
             sleep(500)
             val response = device.sendSerialCommand("FRST")
-            val result = getTestCommand.action(response, if (response) "Serial command success"  else "Serial command error", startTime)
+            val result = factoryResetCommand.action(response, if (response) "Serial command success"  else "Serial command error", startTime)
             addResult(device, result)
         }
     }
 
-    private fun getTest(device: DeviceTest) {
-        statusLogger.info("[${device.deviceNum + 1}] Getting info...")
+    private fun getTest(device: DeviceTest, recheck: Boolean = false) {
+        deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Getting info...")
         val startTime = System.currentTimeMillis()
         if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+            deviceLoggers[device.deviceNum]?.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
             sleep(500)
             if (!device.sendSerialCommand("GET TEST")) {
@@ -204,7 +231,7 @@ class Stage3Updater(
                 val getTestResult = SerialMatchingAction(
                     "Read firmware state",
                     arrayOf(
-                        """.*\[TEST] Board:.*, wifi state: \d.*""".toRegex()
+                        """.*\[TEST] Board:.*""".toRegex()
                     ),
                     arrayOf(
                         ".*ERR.*".toRegex(),
@@ -216,14 +243,14 @@ class Stage3Updater(
                 val result = getTestResult.action("", "", startTime)
                 addResult(device, result)
                 if (result.status == TestStatus.PASS) {
-                    statusLogger.info("[${device.deviceNum + 1}] End value: ${result.endValue}")
-                    val match = """.*build: (\d+),.*mac: ([a-zA-Z0-9:]+),.*""".toRegex()
+                    deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] End value: ${result.endValue}")
+                    val match = """.*build: (\d+),.*mac: ([a-zA-Z0-9:*]+),.*""".toRegex()
                         .matchAt(result.endValue, 0)
                     if (match != null) {
-                        statusLogger.info("[${device.deviceNum + 1}] Build: ${match.groupValues[1]}, mac: ${match.groupValues[2]}")
+                        deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Build: ${match.groupValues[1]}, mac: ${match.groupValues[2]}")
                         device.deviceId = match.groupValues[2].lowercase()
                         testerUi.setID(device.deviceNum, device.deviceId)
-                        if (match.groupValues[1].toInt() == FIRMWARE_BUILD) {
+                        if (!recheck && match.groupValues[1].toInt() == FIRMWARE_BUILD) {
                             device.flashingRequired = false
                         }
                     }
@@ -235,10 +262,10 @@ class Stage3Updater(
 
     private fun flashUpdate(device: DeviceTest) {
         if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+            deviceLoggers[device.deviceNum]?.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
             val startTime = System.currentTimeMillis()
-            statusLogger.info("[${device.deviceNum + 1}] Flashing...")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Flashing...")
             val flashAction = ExecuteCommandAction(
                 "Flash firmware", arrayOf(
                     ".*`pio` exited with non-zero exit code.*".toRegex(RegexOption.IGNORE_CASE),
@@ -247,8 +274,9 @@ class Stage3Updater(
                     ".*Errno.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*error.*".toRegex(RegexOption.IGNORE_CASE)
                 ),
-                "pio run -t upload --upload-port ${device.ipAddress}", -1
-                , File("C:\\_work\\Git\\SlimeVR-Tracker-ESP")
+                "${System.getenv("UPDATER_PIO_PATH")} run -t upload --upload-port ${device.ipAddress}", -1
+                , File(System.getenv("UPDATER_FIRMWARE_PATH")),
+                deviceLoggers[device.deviceNum]
             )
             val flashResult = flashAction.action("", "", startTime)
             addResult(device, flashResult)
@@ -257,9 +285,9 @@ class Stage3Updater(
 
     private fun waitBootSequence(device: DeviceTest) {
         if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+            deviceLoggers[device.deviceNum]?.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
-            statusLogger.info("[${device.deviceNum + 1}] Waiting for boot...")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Waiting for boot...")
             val startTime = System.currentTimeMillis()
             val testI2C = SerialMatchingAction(
                 "Boot test",
@@ -280,9 +308,9 @@ class Stage3Updater(
 
     private fun waitWiFiConnection(device: DeviceTest) {
         if (device.testStatus == TestStatus.ERROR) {
-            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+            deviceLoggers[device.deviceNum]?.warning("[${device.deviceNum + 1}] Skipped due to previous error")
         } else {
-            statusLogger.info("[${device.deviceNum + 1}] Waiting to connect to wifi...")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Waiting to connect to wifi...")
             val startTime = System.currentTimeMillis()
             val testI2C = SerialMatchingAction(
                 "WiFi Connected",
@@ -300,11 +328,11 @@ class Stage3Updater(
             val result = testI2C.action("", "", startTime)
             addResult(device, result)
             if (result.status == TestStatus.PASS) {
-                statusLogger.info("[${device.deviceNum + 1}] Connected: ${result.endValue}")
+                deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] Connected: ${result.endValue}")
                 val match = """.*SSID '([^']+)', ip address ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)""".toRegex()
                     .matchAt(result.endValue, 0)
                 if (match != null) {
-                    statusLogger.info("[${device.deviceNum + 1}] SSID: ${match.groupValues[1]}, IP: ${match.groupValues[2]}")
+                    deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] SSID: ${match.groupValues[1]}, IP: ${match.groupValues[2]}")
                     device.ipAddress = match.groupValues[2]
                     return
                 }
@@ -317,9 +345,9 @@ class Stage3Updater(
     private fun addResult(device: DeviceTest, result: TestResult) {
         device.addTestResult(result)
         if(result.status == TestStatus.ERROR)
-            statusLogger.severe("[${device.deviceNum + 1}] $result")
+            deviceLoggers[device.deviceNum]?.severe("[${device.deviceNum + 1}] $result")
         else
-            statusLogger.info("[${device.deviceNum + 1}] $result")
+            deviceLoggers[device.deviceNum]?.info("[${device.deviceNum + 1}] $result")
         testerUi.setStatus(device.deviceNum, device.testStatus)
     }
 }

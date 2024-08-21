@@ -10,10 +10,9 @@ import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
-import dev.slimevr.testing.MainPanelTestingSuite
+import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.TestStatus
 import dev.slimevr.testing.destroy
-import java.lang.Character.isDigit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
 
@@ -26,6 +25,8 @@ class TesterUI(
     val statusLogHandler: LabelLogHandler
     val testedDevicesUI = mutableListOf<TestingDeviceUI>()
     val window = BasicWindow()
+    val secondRowLabel = Label("Controlling: FIRST row")
+    var secondRow = false
 
     init {
         LogManager.removeNonFileHandlers()
@@ -43,7 +44,12 @@ class TesterUI(
         val mainPanel = Panel()
         mainPanel.setLayoutManager(GridLayout(5))
 
-        for (i in 1..10) {
+        mainPanel.addComponent(
+            secondRowLabel,
+            GridLayout.createHorizontallyFilledLayoutData(5)
+        )
+
+        for (i in 1..20) {
             val testerPanel = Panel()
             val statusColorPanel = EmptySpace(TestStatus.DISCONNECTED.color,
                 TerminalSize(1, 1))
@@ -113,6 +119,8 @@ class TesterUI(
                             device = 9
                         else
                             device -= 1
+                        if(secondRow)
+                            device += 10
                         suite.startTest(device)
                     }
                     ch == 'r' -> {
@@ -132,6 +140,14 @@ class TesterUI(
                         if(failed.isNotEmpty()) {
                             suite.startTest(*failed.toIntArray())
                         }
+                    }
+                    ch == '-' -> {
+                        secondRow = false
+                        secondRowLabel.text = "Controlling: FIRST row"
+                    }
+                    ch == '+' -> {
+                        secondRow = true
+                        secondRowLabel.text = "Controlling: SECOND row"
                     }
                 }
             }

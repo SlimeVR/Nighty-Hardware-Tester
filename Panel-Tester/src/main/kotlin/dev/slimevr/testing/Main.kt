@@ -6,11 +6,14 @@ import com.pi4j.Pi4J
 import com.pi4j.context.Context
 import com.pi4j.io.i2c.I2CProvider
 import dev.slimevr.database.RemoteTestingDatabase
+import dev.slimevr.hardware.Switchboard
 import dev.slimevr.logger.LogManager
+import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.stage2.Stage2TestingSuite
 import dev.slimevr.testing.stage3.Stage3Updater
 import dev.slimevr.ui.TesterUI
 import dev.slimevr.ui.stage2.Stage2UI
+import dev.slimevr.ui.updater.Stage3UpdaterUI
 import java.io.File
 import java.lang.Thread.sleep
 import java.util.logging.Level
@@ -37,7 +40,6 @@ fun main(args: Array<String>) {
 
     val globalLogger = Logger.getLogger("")
     val statusLogger = Logger.getLogger("status")
-    val devicesLogger = Logger.getLogger("devices")
     val database = RemoteTestingDatabase(
         System.getenv("TESTER_RPC_URL"),
         System.getenv("TESTER_RPC_PASSWORD"),
@@ -47,14 +49,17 @@ fun main(args: Array<String>) {
 
     val stage = System.getenv("TESTER_STAGE")?.toInt()
     if (stage == 2) {
-        val testerUI = Stage2UI(globalLogger, statusLogger, devicesLogger)
+        val testerUI = Stage2UI(globalLogger, statusLogger)
         sleep(500)
         val suite = Stage2TestingSuite(listOf(database), testerUI, globalLogger, statusLogger)
         suite.start()
     } else if(stage == 3) {
-        val testerUI = Stage2UI(globalLogger, statusLogger, devicesLogger)
+        val deviceLoggers = arrayOfNulls<Logger>(12)
+        for(i in 1..deviceLoggers.size)
+            deviceLoggers[i-1] = Logger.getLogger("device-{$i}")
+        val testerUI = Stage3UpdaterUI(globalLogger, deviceLoggers)
         sleep(500)
-        val suite = Stage3Updater(listOf(database), testerUI, globalLogger, statusLogger, System.getenv("UPDATER_WIFI_SSID"), System.getenv("UPDATER_WIFI_PASS"))
+        val suite = Stage3Updater(listOf(database), testerUI, globalLogger, deviceLoggers, System.getenv("UPDATER_WIFI_SSID"), System.getenv("UPDATER_WIFI_PASS"))
         suite.start()
     } else {
         pi4j = Pi4J.newAutoContext()
@@ -65,7 +70,7 @@ fun main(args: Array<String>) {
         val testerUi = TesterUI(globalLogger, statusLogger)
 
         val suite =
-            MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 10, globalLogger, statusLogger)
+            MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 20, globalLogger, statusLogger)
         suite.start()
         testerUi.registerTestingSuite(suite)
     }

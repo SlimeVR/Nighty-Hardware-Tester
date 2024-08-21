@@ -5,6 +5,7 @@ import dev.slimevr.testing.TestStatus
 import java.io.File
 import java.io.IOException
 import java.lang.StringBuilder
+import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
@@ -19,23 +20,33 @@ class ExecuteCommandAction(
     failurePatterns: Array<Regex>,
     command: String,
     private val timeout: Long,
-    directory: File? = null
+    directory: File? = null,
+    private val logger: Logger? = null
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
-
-    private val logger: Logger = Logger.getLogger("ExecuteCommandAction")
 
     private val processBuilder: ProcessBuilder =
         ProcessBuilder(command.split(" ")).redirectErrorStream(true).redirectOutput(
             ProcessBuilder.Redirect.PIPE
-        ).directory(directory ?: File(""))
+        ).directory(directory ?: File("").absoluteFile)
 
     override fun action(testedValue: String, log: String, startTime: Long): TestResult {
         val fullLog = mutableListOf<String>()
         if (log.isNotBlank())
             fullLog.add(log)
         var logStart = fullLog.size
-        //logger.info("Starting process: " + processBuilder.command().joinToString(" "))
-        val process = processBuilder.start()
+        logger?.info("Starting process: " + processBuilder.command().joinToString(" "))
+        val process = try {
+            processBuilder.start()
+        } catch(ex: Exception) {
+            logger?.log(Level.SEVERE, "Can't start process", ex)
+            return TestResult(
+                testName,
+                TestStatus.ERROR,
+                startTime,
+                System.currentTimeMillis(),
+                ex.toString(),
+                fullLog.joinToString("\n"))
+        }
         val endTime = System.currentTimeMillis() + timeout
         val inputReader = process.inputReader()
         var testResult = TestStatus.TESTING
@@ -61,7 +72,7 @@ class ExecuteCommandAction(
                 break
             }
             fullLog.subList(logStart, fullLog.size).forEach {
-                //logger.info(it)
+                logger?.info(it)
                 val result = matchString(it)
                 if ((result == MatchResult.SUCCESS) && (testResult != TestStatus.ERROR)) {
                     matchedString = it

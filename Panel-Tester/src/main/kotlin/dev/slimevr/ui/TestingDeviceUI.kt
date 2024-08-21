@@ -9,5 +9,6 @@ data class TestingDeviceUI(
     var panel: Panel,
     var statusColorPanel: EmptySpace,
     var idLabel: Label,
-    var usbLabel: Label
+    var usbLabel: Label,
+    var logLabel: SlimyLabel? = null
 )
