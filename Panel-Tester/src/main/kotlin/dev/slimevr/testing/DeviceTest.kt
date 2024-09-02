@@ -3,7 +3,6 @@ package dev.slimevr.testing
 import com.fazecast.jSerialComm.SerialPort
 import com.fazecast.jSerialComm.SerialPortEvent
 import com.fazecast.jSerialComm.SerialPortMessageListener
-import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets

@@ -43,15 +43,15 @@
 
 //Attempt communication with the device
 //Return true if we got a 'Polo' back from Marco
-boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, uint8_t intPin)
+boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, PinReader* intPinReader)
 {
 	_deviceAddress = deviceAddress; //If provided, store the I2C address from user
 	_i2cPort = &wirePort;			//Grab which port the user wants us to use
-	_int = intPin;					//Get the pin that the user wants to use for interrupts. By default, it's 255 and we'll not use it in dataAvailable() function.
-	if (_int != 255)
-	{
-		pinMode(_int, INPUT_PULLUP);
-	}
+	_int = intPinReader;					//Get the pin that the user wants to use for interrupts. By default, it's 255 and we'll not use it in dataAvailable() function.
+	//if (_int != 255)
+	//{
+	//	pinMode(_int, INPUT_PULLUP);
+	//}
 
 	//We expect caller to begin their I2C port, with the speed of their choice external to the library
 	//But if they forget, we start the hardware here.
@@ -99,7 +99,7 @@ boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, uint8_t intPin)
 	return tBoardInfoReceived;
 }
 
-boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, uint8_t user_INTPin, uint8_t user_RSTPin, uint32_t spiPortSpeed, SPIClass &spiPort)
+boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, PinReader* intPinReader, uint8_t user_RSTPin, uint32_t spiPortSpeed, SPIClass &spiPort)
 {
 	_i2cPort = NULL; //This null tells the send/receive functions to use SPI
 
@@ -111,12 +111,12 @@ boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, uint8_t user_I
 
 	_cs = user_CSPin;
 	_wake = user_WAKPin;
-	_int = user_INTPin;
+	_int = intPinReader;
 	_rst = user_RSTPin;
 
 	pinMode(_cs, OUTPUT);
 	pinMode(_wake, OUTPUT);
-	pinMode(_int, INPUT_PULLUP);
+	//pinMode(_int, INPUT_PULLUP);
 	pinMode(_rst, OUTPUT);
 
 	digitalWrite(_cs, HIGH); //Deselect BNO080
@@ -201,11 +201,11 @@ uint16_t BNO080::getReadings(void)
 	//If we have an interrupt pin connection available, check if data is available.
 	//If int pin is not set, then we'll rely on receivePacket() to timeout
 	//See issue 13: https://github.com/sparkfun/SparkFun_BNO080_Arduino_Library/issues/13
-	if (_int != 255)
-	{
-		if (digitalRead(_int) == HIGH)
+	//if (_int != nullptr)
+	//{
+		if (_int->digitalRead() == HIGH)
 			return 0;
-	}
+	//}
 
 	if (receivePacket() == true)
 	{
@@ -220,7 +220,7 @@ uint16_t BNO080::getReadings(void)
 		}
 		else if(shtpHeader[2] == CHANNEL_GYRO)
 		{
-		return parseInputReport(); //This will update the rawAccelX, etc variables depending on which feature report is found
+			return parseInputReport(); //This will update the rawAccelX, etc variables depending on which feature report is found
 		}
 	}
 	return 0;
@@ -1487,7 +1487,7 @@ boolean BNO080::waitForSPI()
 {
 	for (uint8_t counter = 0; counter < 125; counter++) //Don't got more than 255
 	{
-		if (digitalRead(_int) == LOW)
+		if (_int->digitalRead() == LOW)
 			return (true);
 		if (_printDebug == true)
 			_debugPort->println(F("SPI Wait"));
@@ -1505,7 +1505,7 @@ boolean BNO080::receivePacket(void)
 {
 	if (_i2cPort == NULL) //Do SPI
 	{
-		if (digitalRead(_int) == HIGH)
+		if (_int->digitalRead() == HIGH)
 			return (false); //Data is not available
 
 		//Old way: if (waitForSPI() == false) return (false); //Something went wrong

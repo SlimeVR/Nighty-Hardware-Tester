@@ -8,10 +8,12 @@ import com.pi4j.io.i2c.I2CProvider
 import dev.slimevr.database.RemoteTestingDatabase
 import dev.slimevr.hardware.Switchboard
 import dev.slimevr.logger.LogManager
+import dev.slimevr.testing.extensions.ExtensionsPanelTestingSuite
 import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.stage2.Stage2TestingSuite
 import dev.slimevr.testing.stage3.Stage3Updater
 import dev.slimevr.ui.TesterUI
+import dev.slimevr.ui.extensions.ExtensionsUpdaterUI
 import dev.slimevr.ui.stage2.Stage2UI
 import dev.slimevr.ui.updater.Stage3UpdaterUI
 import java.io.File
@@ -43,7 +45,7 @@ fun main(args: Array<String>) {
     val database = RemoteTestingDatabase(
         System.getenv("TESTER_RPC_URL"),
         System.getenv("TESTER_RPC_PASSWORD"),
-        "slime-tester-1",
+        System.getenv("TESTER_NAME")?:"slime-tester-1",
         System.getenv("TESTER_REPORT_TYPE")
     )
 
@@ -55,11 +57,27 @@ fun main(args: Array<String>) {
         suite.start()
     } else if(stage == 3) {
         val deviceLoggers = arrayOfNulls<Logger>(12)
-        for(i in 1..deviceLoggers.size)
-            deviceLoggers[i-1] = Logger.getLogger("device-{$i}")
+        for (i in 1..deviceLoggers.size)
+            deviceLoggers[i - 1] = Logger.getLogger("device-{$i}")
         val testerUI = Stage3UpdaterUI(globalLogger, deviceLoggers)
         sleep(500)
-        val suite = Stage3Updater(listOf(database), testerUI, globalLogger, deviceLoggers, System.getenv("UPDATER_WIFI_SSID"), System.getenv("UPDATER_WIFI_PASS"))
+        val suite = Stage3Updater(
+            listOf(database),
+            testerUI,
+            globalLogger,
+            deviceLoggers,
+            System.getenv("UPDATER_WIFI_SSID"),
+            System.getenv("UPDATER_WIFI_PASS")
+        )
+        suite.start()
+    } else if(stage == 4) {
+        val devices = 20
+        val deviceLoggers = arrayOfNulls<Logger>(devices)
+        for (i in 1..deviceLoggers.size)
+            deviceLoggers[i - 1] = Logger.getLogger("device-{$i}")
+        val testerUI = ExtensionsUpdaterUI(globalLogger, deviceLoggers)
+        sleep(500)
+        val suite = ExtensionsPanelTestingSuite(listOf(database), testerUI, devices, globalLogger, deviceLoggers)
         suite.start()
     } else {
         pi4j = Pi4J.newAutoContext()

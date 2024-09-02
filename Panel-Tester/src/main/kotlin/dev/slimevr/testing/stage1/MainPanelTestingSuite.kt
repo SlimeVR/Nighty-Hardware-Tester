@@ -4,6 +4,8 @@ import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.Switchboard
 import dev.slimevr.hardware.serial.SerialManager
+import dev.slimevr.hardware.usb.USBDmesgWatcher
+import dev.slimevr.hardware.usb.USBNotify
 import dev.slimevr.testing.*
 import dev.slimevr.testing.actions.*
 import dev.slimevr.ui.TesterUI

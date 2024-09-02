@@ -1,4 +1,4 @@
-package dev.slimevr.testing
+package dev.slimevr.hardware.usb
 
 interface USBNotify {
 

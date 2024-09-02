@@ -23,6 +23,7 @@
 
 #include "sensors/bno080sensor.h"
 #include "utils.h"
+#include <memory>
 
 void BNO080Sensor::motionSetup()
 {
@@ -112,7 +113,7 @@ void BNO080Sensor::motionLoop()
         {
             tap = imu.getTapDetector();
         }
-        if (m_IntPin == 255 || imu.I2CTimedOut())
+        if (m_IntPin == nullptr || imu.I2CTimedOut())
             break;
     }
     if (lastData + 1000 < millis() && configured)

@@ -1,12 +1,12 @@
-package dev.slimevr.testing
+package dev.slimevr.hardware.usb
 
 import java.util.logging.Logger
 
-class USBMapWatcher(
-    private val testingSuite: MainPanelTestingSuite
+class USBDmesgWatcher(
+    private val notifyUSB: USBNotify
 ): Thread("USB Map Dmesg watcher") {
 
-    val logger: Logger = Logger.getLogger("USBMapWatcher")
+    val logger: Logger = Logger.getLogger("USBDmesgWatcher")
     private val usbAttachedRegex = "\\[ *\\d+\\.\\d+] .*usb ([^:]+): .* now attached to (ttyUSB\\d+)".toRegex()
     private val usbDetachedRegex = "\\[ *\\d+\\.\\d+] .* now disconnected from (ttyUSB\\d+)".toRegex()
     private val currentUSBMap = mutableMapOf<String,String>()
@@ -29,7 +29,7 @@ class USBMapWatcher(
                         currentUSBMap[res1.groupValues[1]] = res1.groupValues[2]
                         reverseUSBMap[res1.groupValues[2]] = res1.groupValues[1]
                     }
-                    testingSuite.setUSB(res1.groupValues[1], res1.groupValues[2])
+                    notifyUSB.setUSB(res1.groupValues[1], res1.groupValues[2])
                 }
             }
             if(line.contains("now disconnected from tty")) {
@@ -47,7 +47,7 @@ class USBMapWatcher(
                             reverseUSBMap.remove(res1.groupValues[1])
                             currentUSBMap.remove(addr)
                         }
-                        testingSuite.setUSB(addr, "")
+                        notifyUSB.setUSB(addr, "")
                     }
                 }
             }

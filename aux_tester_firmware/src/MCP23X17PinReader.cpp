@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 Eiren Rain & SlimeVR contributors
+    Copyright (c) 2024 Eiren Rain & SlimeVR contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -20,45 +20,9 @@
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 */
+#include "MCP23X17PinReader.h"
 
-#ifndef SENSORS_BNO080SENSOR_H
-#define SENSORS_BNO080SENSOR_H
-
-#include "sensor.h"
-#include <BNO080.h>
-#include <memory>
-#include <MCP23X17PinReader.h>
-
-class BNO080Sensor : public Sensor
+int MCP23X17PinReader::digitalRead()
 {
-public:
-    BNO080Sensor(uint8_t id, uint8_t type, uint8_t address, float rotation, PinReader* intPin)
-        : Sensor("BNO080Sensor", type, id, address, rotation), m_IntPin(intPin) {};
-    ~BNO080Sensor(){};
-    void motionSetup() override final;
-    void postSetup() override {
-        lastData = millis();
-    }
-
-    void motionLoop() override final;
-    void sendData() override final;
-    uint8_t getSensorState() override final;
-
-private:
-    BNO080 imu{};
-
-    PinReader* m_IntPin;
-
-    uint8_t tap;
-    unsigned long lastData = 0;
-    uint8_t lastReset = 0;
-    BNO080Error lastError{};
-
-    // Magnetometer specific members
-    Quat magQuaternion{};
-    uint8_t magCalibrationAccuracy = 0;
-    float magneticAccuracyEstimate = 999;
-    bool newMagData = false;
-};
-
-#endif
+    return mcp23x17->digitalRead(pinNum);
+}

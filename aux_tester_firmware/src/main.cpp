@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2021 Eiren Rain & SlimeVR contributors
+    Copyright (c) 2024 Eiren Rain & SlimeVR contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,9 @@
 #include "sensors/bno080sensor.h"
 #include <Adafruit_MCP23X17.h>
 #include "PCA9547.h"
+#include <CmdCallback.hpp>
+#include <memory>
+#include "MCP23X17PinReader.h"
 
 #define IMU_TIMEOUT 300
 #define INT_PIN 10
@@ -35,6 +38,8 @@
 #define BUTTON_PIN 1
 #define I2C_SDA 1
 #define I2C_SCL 0
+#define LED_RED 3
+#define LED_GREEN 4
 
 SlimeVR::Logging::Logger logger("SlimeVR");
 
@@ -42,25 +47,31 @@ unsigned long imuConnected;
 Sensor *m_Sensor1;
 int8_t foundIMUAddr = -1;
 Adafruit_MCP23X17 mcp;
+CmdCallback<1> cmdCallbacks;
+CmdParser cmdParser;
+CmdBuffer<256> cmdBuffer;
+bool start = false;
+bool justStarted = false;
 
 struct ImuTestSettings {
     bool i2cSelectEnabled;
     uint8_t i2cSelectChannel;
     uint8_t i2cAddress;
     uint8_t intPinGP;
+    std::unique_ptr<PinReader> intPin;
 };
 
 ImuTestSettings imus[] = {
-    {false, 0, 0x4a ^ 0x02, 6},
-    {false, 0, 0x4b ^ 0x02, 7},
-    {true, 0, 0x4a, 8},
-    {true, 0, 0x4b, 9},
-    {true, 1, 0x4a, 10},
-    {true, 1, 0x4b, 11},
-    {true, 2, 0x4a, 12},
-    {true, 2, 0x4b, 13},
-    {true, 3, 0x4a, 14},
-    {true, 3, 0x4b, 15},
+    {false, 0, 0x4a ^ 0x02, 6, nullptr},
+    {false, 0, 0x4b ^ 0x02, 2, nullptr},
+    {true, 0, 0x4a, 8, nullptr},
+    {true, 0, 0x4b, 9, nullptr},
+    {true, 1, 0x4a, 10, nullptr},
+    {true, 1, 0x4b, 11, nullptr},
+    {true, 2, 0x4a, 12, nullptr},
+    {true, 2, 0x4b, 13, nullptr},
+    {true, 3, 0x4a, 14, nullptr},
+    {true, 3, 0x4b, 1, nullptr},
 };
 
 uint8_t i2cSelectorChannel(uint8_t ch) {
@@ -76,6 +87,14 @@ uint8_t i2cSelectorDisable() {
     Wire.beginTransmission(PCAADDR);
     Wire.write(0);
     return Wire.endTransmission();
+}
+
+void updateCommands() {
+    cmdCallbacks.updateCmdProcessing(&cmdParser, &cmdBuffer, &Serial);
+}
+
+void cmdStart(CmdParser* parser) {
+    start = true;
 }
 
 void setup()
@@ -118,43 +137,85 @@ void setup()
 
     pinMode(INT_PIN, INPUT);
     mcp.setupInterrupts(true, false, LOW);
+    mcp.pinMode(LED_RED, OUTPUT);
+    mcp.pinMode(LED_GREEN, OUTPUT);
+    mcp.pinMode(BUTTON_PIN, INPUT_PULLUP);
+    mcp.digitalWrite(LED_RED, LOW);
+    mcp.digitalWrite(LED_GREEN, LOW);
+    cmdCallbacks.addCmd("START", &cmdStart);
+
+    for(uint8_t i = 0; i < 10; i++)
+    {
+        ImuTestSettings* test = &imus[i];
+        mcp.pinMode(test->intPinGP, INPUT_PULLUP);
+        test->intPin = std::make_unique<MCP23X17PinReader>(&mcp, test->intPinGP);
+    }
 
     logger.info("Boot complete, awaiting button interrupt at A1");
 }
 
-void printPass(uint8_t boardId = 0) {
-    Serial.printf("[%d] \033[32;42mPASS[0m\n", boardId);
-}
-
-void printFail(uint8_t boardId = 0) {
-    Serial.printf("[%d] \033[31;41mFAIL[0m\n", boardId);
+void checkIfTrackersConnected() {
+    bool found = false;
+    for(uint8_t i = 0; i < 10; i++)
+    {
+        ImuTestSettings* test = &imus[i];
+        if(test->i2cSelectEnabled)
+        {
+            i2cSelectorChannel(test->i2cSelectChannel);
+        }
+        else
+        {
+            i2cSelectorDisable();
+        }
+        Wire.end();
+        Wire.begin(I2C_SDA, I2C_SCL);
+        if(I2CSCAN::isI2CExist(test->i2cAddress))
+        {
+            found = true;
+            break;
+        }
+    }
+    if(found)
+    {
+        if(!justStarted)
+        {
+            logger.info("Tracker connection auto-detected, starting test automatically");
+            start = true;
+        }
+    } else {
+        justStarted = false;
+    }
 }
 
 void loop()
 {
+    updateCommands();
+    checkIfTrackersConnected();
     bool testFailed = false;
     // enable interrupt on button_pin
-    mcp.setupInterruptPin(BUTTON_PIN, LOW);
-    mcp.pinMode(BUTTON_PIN, INPUT_PULLUP);
-    if (!digitalRead(INT_PIN))
+    if (!digitalRead(INT_PIN) || start)
     {
         logger.info("Interrupt detected on pin %d", mcp.getLastInterruptPin());
-        if(!mcp.digitalRead(BUTTON_PIN))
+        if (!mcp.digitalRead(BUTTON_PIN) || start)
         {
-            mcp.disableInterruptPin(BUTTON_PIN);
+            mcp.digitalWrite(LED_RED, LOW);
+            mcp.digitalWrite(LED_GREEN, LOW);
+            start = false;
+            justStarted = true;
             logger.info("Button pressed");
             delay(250);  // debounce
+            if(start)
+                delay(1000); // Wait good connection
             mcp.clearInterrupts();  // clear
             logger.info("Scanning BNO085s...");
             for(uint8_t i = 0; i < 10; i++)
             {
                 bool imuFailed = false;
-                ImuTestSettings test = imus[i];
-                logger.info("[%d] Scanning: %s %d %d %d", i, (test.i2cSelectEnabled ? "true" : "false"), test.i2cSelectChannel, test.i2cAddress, test.intPinGP);
-                mcp.setupInterruptPin(test.intPinGP, LOW);
-                if(test.i2cSelectEnabled)
+                ImuTestSettings* test = &imus[i];
+                logger.info("[%d] Scanning: %s %d %d %d", i, (test->i2cSelectEnabled ? "true" : "false"), test->i2cSelectChannel, test->i2cAddress, test->intPinGP);
+                if(test->i2cSelectEnabled)
                 {
-                    i2cSelectorChannel(test.i2cSelectChannel);
+                    i2cSelectorChannel(test->i2cSelectChannel);
                 }
                 else
                 {
@@ -162,10 +223,10 @@ void loop()
                 }
                 Wire.end();
                 Wire.begin(I2C_SDA, I2C_SCL);
-                if(I2CSCAN::isI2CExist(test.i2cAddress))
+                if(I2CSCAN::isI2CExist(test->i2cAddress))
                 {
                     logger.info("[%d] I2C Found", i);
-                    m_Sensor1 = new BNO080Sensor(i, IMU, test.i2cAddress, IMU_ROTATION, INT_PIN);
+                    m_Sensor1 = new BNO080Sensor(i, IMU, test->i2cAddress, IMU_ROTATION, test->intPin.get());
                     m_Sensor1->motionSetup();
                     if(!m_Sensor1->isWorking())
                     {
@@ -220,8 +281,17 @@ void loop()
                     }
                     delay(10);
                 }
-                mcp.disableInterruptPin(test.intPinGP);
                 delay(100);
+            }
+            if(testFailed)
+            {
+                mcp.digitalWrite(LED_RED, HIGH);
+                logger.fatal("Test failed");
+            }
+            else
+            {
+                mcp.digitalWrite(LED_GREEN, HIGH);
+                logger.info("Test passed");
             }
         }
     }

@@ -1,7 +1,23 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     kotlin("jvm") version "1.8.21"
     application
     id("com.github.johnrengelman.shadow") version "7.1.2"
+}
+
+kotlin {
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+tasks.withType<KotlinCompile> {
+    kotlinOptions.jvmTarget = "17"
 }
 
 group = "org.example"
@@ -34,10 +50,6 @@ tasks.shadowJar {
     archiveBaseName.set("slimevr")
     archiveClassifier.set("")
     archiveVersion.set("")
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 application {
