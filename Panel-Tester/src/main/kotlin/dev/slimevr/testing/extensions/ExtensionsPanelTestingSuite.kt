@@ -28,12 +28,16 @@ class ExtensionsPanelTestingSuite(
     private var rightHalf: SerialPort? = null
     private var lineRegex = ".*\\[(\\d)].*".toRegex()
 
+    private val usbPortsMap = mapOf(
+        Pair("1-2", false), Pair("3-2", true)
+    )
+
     override fun run() {
-        if(OperatingSystem.getCurrentPlatform() == OperatingSystem.LINUX) {
-            USBDmesgWatcher(this).start()
-        } else {
+        //if(OperatingSystem.getCurrentPlatform() == OperatingSystem.LINUX) {
+        //    USBDmesgWatcher(this).start()
+        //} else {
             USBSerialWatcher(this, serialManager).start()
-        }
+        //}
     }
 
     private fun parseDeviceLine(deviceId: Int, line: String) {
@@ -97,7 +101,6 @@ class ExtensionsPanelTestingSuite(
             } else {
                 logger.info("[${side}] Left half disconnected")
             }
-
         } else {
             logger.info("[${side}] Serial event ${event.eventType}")
         }
@@ -115,45 +118,63 @@ class ExtensionsPanelTestingSuite(
         }
     }
 
-    override fun setUSB(addr: String, tty: String) {
-        if(leftHalf == null) {
-            leftHalf = SerialPort.getCommPort(tty)
-            if(leftHalf != null) {
-                serialManager.markAsKnown(leftHalf!!)
-                serialManager.openPort(leftHalf!!, object: SerialPortMessageListener{
-                    override fun serialEvent(event: SerialPortEvent?) {
-                        if(event != null)
-                            serialEvent(event, false)
-                    }
-                    override fun getListeningEvents() = (SerialPort.LISTENING_EVENT_PORT_DISCONNECTED
-                        or SerialPort.LISTENING_EVENT_DATA_RECEIVED)
-                    override fun getMessageDelimiter() = byteArrayOf(0x0A)
-                    override fun delimiterIndicatesEndOfMessage() = true
-                })
-                logger.info("Left half connected on $addr / $tty")
-            } else {
-                logger.info("Can't find port for new connected $addr / $tty")
-            }
-        } else if(rightHalf == null) {
-            rightHalf = SerialPort.getCommPort(tty)
-            if(rightHalf != null) {
-                serialManager.markAsKnown(rightHalf!!)
-                serialManager.openPort(rightHalf!!, object: SerialPortMessageListener{
-                    override fun serialEvent(event: SerialPortEvent?) {
-                        if(event != null)
-                            serialEvent(event, true)
-                    }
-                    override fun getListeningEvents() = (SerialPort.LISTENING_EVENT_PORT_DISCONNECTED
-                        or SerialPort.LISTENING_EVENT_DATA_RECEIVED)
-                    override fun getMessageDelimiter() = byteArrayOf(0x0A)
-                    override fun delimiterIndicatesEndOfMessage() = true
-                })
-                logger.info("Right half connected on $addr / $tty")
-            } else {
-                logger.info("Can't find port for new connected $addr / $tty")
-            }
+    fun setUSB(port: SerialPort, right: Boolean) {
+        if(right) {
+            rightHalf = port
+            serialManager.markAsKnown(rightHalf!!)
+            serialManager.openPort(rightHalf!!, object: SerialPortMessageListener{
+                override fun serialEvent(event: SerialPortEvent?) {
+                    if(event != null)
+                        serialEvent(event, true)
+                }
+                override fun getListeningEvents() = (SerialPort.LISTENING_EVENT_PORT_DISCONNECTED
+                    or SerialPort.LISTENING_EVENT_DATA_RECEIVED)
+                override fun getMessageDelimiter() = byteArrayOf(0x0A)
+                override fun delimiterIndicatesEndOfMessage() = true
+            })
         } else {
-            logger.severe("Third device connected, can't continue: $addr / $tty")
+            leftHalf = port
+            serialManager.markAsKnown(leftHalf!!)
+            serialManager.openPort(leftHalf!!, object: SerialPortMessageListener{
+                override fun serialEvent(event: SerialPortEvent?) {
+                    if(event != null)
+                        serialEvent(event, false)
+                }
+                override fun getListeningEvents() = (SerialPort.LISTENING_EVENT_PORT_DISCONNECTED
+                    or SerialPort.LISTENING_EVENT_DATA_RECEIVED)
+                override fun getMessageDelimiter() = byteArrayOf(0x0A)
+                override fun delimiterIndicatesEndOfMessage() = true
+            })
+        }
+    }
+
+    override fun setUSB(addr: String, tty: String) {
+        if(tty.isBlank())
+            return
+        val port = SerialPort.getCommPort(tty)
+        if(port == null) {
+            logger.info("Can't find port for new connected [$addr / $tty]")
+            return
+        }
+        /*if(OperatingSystem.getCurrentPlatform() == OperatingSystem.LINUX) {
+            if(!usbPortsMap.contains(addr)) {
+                logger.info("Newly connected port [$addr / $tty] is not mapped")
+                return
+            }
+            setUSB(port, usbPortsMap[addr]!!)
+            if(usbPortsMap[addr]!!) {
+                logger.info("Right half connected on [$addr / $tty]")
+            } else {
+                logger.info("Left half connected on [$addr / $tty]")
+            }
+        } else */if(leftHalf == null) {
+            setUSB(port, false)
+            logger.info("Left half connected on [$addr / $tty]")
+        } else if(rightHalf == null) {
+            setUSB(port, true)
+            logger.info("Right half connected on [$addr / $tty]")
+        } else {
+            logger.severe("Third device connected, can't continue: [$addr / $tty]")
         }
     }
 }

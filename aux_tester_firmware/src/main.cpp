@@ -191,13 +191,13 @@ void loop()
 {
     updateCommands();
     checkIfTrackersConnected();
-    bool testFailed = false;
     // enable interrupt on button_pin
     if (!digitalRead(INT_PIN) || start)
     {
         logger.info("Interrupt detected on pin %d", mcp.getLastInterruptPin());
         if (!mcp.digitalRead(BUTTON_PIN) || start)
         {
+            bool testFailed = false;
             mcp.digitalWrite(LED_RED, LOW);
             mcp.digitalWrite(LED_GREEN, LOW);
             start = false;
@@ -221,8 +221,10 @@ void loop()
                 {
                     i2cSelectorDisable();
                 }
+#if ESP32
                 Wire.end();
                 Wire.begin(I2C_SDA, I2C_SCL);
+#endif
                 if(I2CSCAN::isI2CExist(test->i2cAddress))
                 {
                     logger.info("[%d] I2C Found", i);
@@ -281,7 +283,7 @@ void loop()
                     }
                     delay(10);
                 }
-                delay(100);
+                delay(50);
             }
             if(testFailed)
             {
@@ -295,6 +297,5 @@ void loop()
             }
         }
     }
-    delay(1000);
-    logger.info("Awaiting interrupts...");
+    delay(100);
 }

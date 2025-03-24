@@ -7,8 +7,16 @@ class USBDmesgWatcher(
 ): Thread("USB Map Dmesg watcher") {
 
     val logger: Logger = Logger.getLogger("USBDmesgWatcher")
-    private val usbAttachedRegex = "\\[ *\\d+\\.\\d+] .*usb ([^:]+): .* now attached to (ttyUSB\\d+)".toRegex()
-    private val usbDetachedRegex = "\\[ *\\d+\\.\\d+] .* now disconnected from (ttyUSB\\d+)".toRegex()
+    private val usbAttachedRegexes = arrayOf(
+        "\\[ *\\d+\\.\\d+] .*usb ([^:]+): .* now attached to (ttyUSB\\d+)".toRegex(),
+        "\\[ *\\d+\\.\\d+] cdc_acm ([^:]+):[^:]+: (ttyACM\\d+).*".toRegex()
+    )
+    private val usbDetachedRegexesTTY = arrayOf(
+        "\\[ *\\d+\\.\\d+] .* now disconnected from (ttyUSB\\d+)".toRegex()
+    )
+    private val usbDetachedRegexesAddr = arrayOf(
+        "\\[ *\\d+\\.\\d+] usb ([^:]+): USB disconnect.*".toRegex()
+    )
     private val currentUSBMap = mutableMapOf<String,String>()
     private val reverseUSBMap = mutableMapOf<String,String>()
 
@@ -20,31 +28,49 @@ class USBDmesgWatcher(
         val inputReader = process.inputReader()
         while(true) {
             val line = inputReader.readLine() ?: break
-            if(line.contains("now attached to tty")) {
+            logger.info("[DMESG] $line")
+            for(usbAttachedRegex in usbAttachedRegexes) {
                 val res1 = usbAttachedRegex.matchEntire(line)
-                if(res1 == null) {
-                    logger.warning("Can't parse dmesg line: $line")
-                } else {
+                if(res1 != null) {
+                    val addr = res1.groupValues[1]
+                    val tty = res1.groupValues[2]
                     synchronized(this) {
-                        currentUSBMap[res1.groupValues[1]] = res1.groupValues[2]
-                        reverseUSBMap[res1.groupValues[2]] = res1.groupValues[1]
+                        currentUSBMap[addr] = tty
+                        reverseUSBMap[tty] = addr
                     }
-                    notifyUSB.setUSB(res1.groupValues[1], res1.groupValues[2])
+                    notifyUSB.setUSB(addr, tty)
                 }
             }
-            if(line.contains("now disconnected from tty")) {
+            for(usbDetachedRegex in usbDetachedRegexesTTY) {
                 val res1 = usbDetachedRegex.matchEntire(line)
-                if(res1 == null) {
-                    logger.warning("Can't parse dmesg line: $line")
-                } else {
+                if(res1 != null) {
+                    val tty = res1.groupValues[1]
                     val addr = synchronized(this) {
-                        reverseUSBMap[res1.groupValues[1]]
+                        reverseUSBMap[tty]
                     }
                     if(addr == null) {
                         logger.warning("Disconnected not connected usb: $line")
                     } else {
                         synchronized(this) {
-                            reverseUSBMap.remove(res1.groupValues[1])
+                            reverseUSBMap.remove(tty)
+                            currentUSBMap.remove(addr)
+                        }
+                        notifyUSB.setUSB(addr, "")
+                    }
+                }
+            }
+            for(usbDetachedRegex in usbDetachedRegexesAddr) {
+                val res1 = usbDetachedRegex.matchEntire(line)
+                if(res1 != null) {
+                    val addr = res1.groupValues[1]
+                    val tty = synchronized(this) {
+                        currentUSBMap[addr]
+                    }
+                    if(tty == null) {
+                        logger.warning("Disconnected not connected usb: $line")
+                    } else {
+                        synchronized(this) {
+                            reverseUSBMap.remove(tty)
                             currentUSBMap.remove(addr)
                         }
                         notifyUSB.setUSB(addr, "")
