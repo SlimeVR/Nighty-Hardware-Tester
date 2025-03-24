@@ -149,6 +149,12 @@ class TesterUI(
                         secondRow = true
                         secondRowLabel.text = "Controlling: SECOND row"
                     }
+                    ch == 'g' -> {
+                        suite.startTest(10, 11, 12, 13, 14)
+                    }
+                    ch == 'b' -> {
+                        suite.startTest(15, 16, 17, 18, 19)
+                    }
                 }
             }
         })
