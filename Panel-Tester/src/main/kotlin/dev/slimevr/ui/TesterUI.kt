@@ -107,6 +107,7 @@ class TesterUI(
                 if(!suite.isReady())
                     return
                 val ch = keyStroke?.character
+                val lch = ch?.lowercase()?.get(0)
                 when {
                     ch == null -> {}
                     ch == ' ' -> {
@@ -123,36 +124,36 @@ class TesterUI(
                             device += 10
                         suite.startTest(device)
                     }
-                    ch == 'r' -> {
+                    lch == 'r' -> {
                         val failed = suite.getFailedDevices()
                         if(failed.isNotEmpty())
                             suite.startTest(*failed.toIntArray())
                     }
-                    ch == 'u' -> {
+                    lch == 'u' -> {
                         suite.startTest(0, 1, 2, 3, 4)
                     }
-                    ch == 'j' -> {
+                    lch == 'j' -> {
                         suite.startTest(5, 6, 7, 8, 9)
                     }
-                    ch == 't' -> {
+                    lch == 't' -> {
                         suite.transposeDevices()
                         val failed = suite.getFailedDevices()
                         if(failed.isNotEmpty()) {
                             suite.startTest(*failed.toIntArray())
                         }
                     }
-                    ch == '-' -> {
+                    lch == '-' -> {
                         secondRow = false
                         secondRowLabel.text = "Controlling: FIRST row"
                     }
-                    ch == '+' -> {
+                    lch == '+' -> {
                         secondRow = true
                         secondRowLabel.text = "Controlling: SECOND row"
                     }
-                    ch == 'g' -> {
+                    lch == 'g' -> {
                         suite.startTest(10, 11, 12, 13, 14)
                     }
-                    ch == 'b' -> {
+                    lch == 'b' -> {
                         suite.startTest(15, 16, 17, 18, 19)
                     }
                 }
