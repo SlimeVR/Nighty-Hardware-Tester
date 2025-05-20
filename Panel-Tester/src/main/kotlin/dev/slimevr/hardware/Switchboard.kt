@@ -48,6 +48,10 @@ class Switchboard(
     private var enableChAPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(9).provider("pigpio-digital-output").build()
     private var enableChBPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(11).provider("pigpio-digital-output").build()
 
+    private var powerFaultPin =
+        pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.PULL_UP).address(10)
+            .provider("pigpio-digital-input"))
+
     init {
         powerOff()
         disableAll()
@@ -76,6 +80,8 @@ class Switchboard(
     fun disableDevice(deviceNum: Int) {
         disable(enablePins[deviceNum])
     }
+
+    fun isPowerFault() = powerFaultPin.isLow
 
     fun disableAll() {
         flashMode(false)

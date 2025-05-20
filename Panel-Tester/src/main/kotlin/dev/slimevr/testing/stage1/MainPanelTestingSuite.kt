@@ -30,7 +30,7 @@ class MainPanelTestingSuite(
     private val serialBootTimeMS = 200L
     private val bootTimeMS = 1500L
     private val resetTimeMS = 300L
-    private val FIRMWARE_BUILD = 17
+    private val FIRMWARE_BUILD = 20
     private val TEST_CHRG_DIODE_VOLTAGES = false
     private val RETRIES = 5
 
@@ -39,9 +39,11 @@ class MainPanelTestingSuite(
     private val actionTestVBUS_REF = VoltageTestAction("VBUS reference", 4.6f, 5.5f)
     private val actionTestVBUS_VCC = VoltageTestAction("VCC voltage from VBUS power", 3.3f, 5.5f)
     private val actionTestVBUS_3v3 = VoltageTestAction("3v3 voltage from VBUS power", 2.9f, 3.2f)
-    private val actionTestVBUS_Bat = VoltageTestAction("Bat voltage from VBUS power", 3.2f, 4.3f)
+    private val actionTestVBUS_Bat = VoltageTestAction("Bat voltage from VBUS power", 3.2f, 4.45f)
     private val actionTestVBUS_CHRG = VoltageTestAction("Chrg LED voltage from VBUS power", 0.0f, 1f)
     private val actionTestVBUS_FULL = VoltageTestAction("Full LED voltage from VBUS power", 0.0f, 1f)
+    private val actionTestVBUS_PWROK_1 = SuccessAction("Power fault 1 OK")
+    private val actionTestVBUS_PWROK_2 = SuccessAction("Power fault 2 OK")
 
     private val actionTestBAT_REF = VoltageTestAction("Bat reference", 4.6f, 5.5f)
     private val actionTestBAT_VCC = VoltageTestAction("VCC voltage from Bat power", 3.3f, 5.5f)
@@ -213,12 +215,33 @@ class MainPanelTestingSuite(
         val testI2C = SerialMatchingAction(
             "Test I2C",
             arrayOf(
-                """\[INFO ] \[BNO080Sensor:0] Connected to BNO085 on 0x4a""".toRegex()
+                """\[INFO ] \[BNO080Sensor:0] Connected to BNO085 on 0x4a""".toRegex(),
+                """\[INFO ] \[SensorManager] Sensor 0 automatically detected with ICM45686""".toRegex()
             ),
             arrayOf(
                 "ERR".toRegex(),
                 "FATAL".toRegex(),
                 "Connected to BNO085 on 0x4b".toRegex()
+            ),
+            device,
+            30000
+        )
+        val result = testI2C.action("", "", startTime)
+        addResult(device, result)
+    }
+
+    private fun testMagnetometer(device: DeviceTest) {
+        statusLogger.info("[${device.deviceNum + 1}] Testing Magnetometer...")
+        val startTime = System.currentTimeMillis()
+        val testI2C = SerialMatchingAction(
+            "Test Magnetometer",
+            arrayOf(
+                """\[INFO ] \[MagDriver] Found mag of type QMC6309, initializing!""".toRegex(),
+            ),
+            arrayOf(
+                "ERR".toRegex(),
+                "FATAL".toRegex(),
+                "\\[INFO ] \\[MagDriver] No mag found!".toRegex()
             ),
             device,
             30000
@@ -237,7 +260,7 @@ class MainPanelTestingSuite(
                 "Test IMU",
                 arrayOf(""".*Sensor\[0] sent some data, looks working\..*""".toRegex(RegexOption.IGNORE_CASE)),
                 arrayOf(
-                    ".*Sensor 1 didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
+                    ".*Sensor\\[1] didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*Sensor\\[0] didn't send any data yet!.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*ERR.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*FATAL.*".toRegex(RegexOption.IGNORE_CASE)
@@ -281,12 +304,12 @@ class MainPanelTestingSuite(
                     addResult(device, result)
                     if (result.status == TestStatus.PASS) {
                         statusLogger.info("[${device.deviceNum + 1}] End value: ${result.endValue}")
-                        val match = """.*build: (\d+),.*mac: ([a-zA-Z0-9:]+),.*""".toRegex()
+                        val match = """.*(build|protocol): (\d+),.*mac: ([a-zA-Z0-9:]+),.*""".toRegex()
                             .matchAt(result.endValue, 0)
                         if (match != null) {
-                            statusLogger.info("[${device.deviceNum + 1}] Build: ${match.groupValues[1]}, mac: ${match.groupValues[2]}")
-                            if (match.groupValues[1].toInt() == FIRMWARE_BUILD) {
-                                device.deviceId = match.groupValues[2].lowercase()
+                            statusLogger.info("[${device.deviceNum + 2}] Build: ${match.groupValues[2]}, mac: ${match.groupValues[3]}")
+                            if (match.groupValues[2].toInt() == FIRMWARE_BUILD) {
+                                device.deviceId = match.groupValues[3].lowercase()
                                 testerUi.setID(device.deviceNum, device.deviceId)
                                 device.flashingRequired = false
                                 return
@@ -335,6 +358,8 @@ class MainPanelTestingSuite(
                     //testI2C(device)
                     getTest(device)
                     testIMU(device)
+                    // Todo: add mag test after we have it implemented
+                    // testMag(device)
                 } else {
                     val flashResult = serialOpened.action(false, " Can't open port. Error ${device.serialPort!!.lastErrorCode}", System.currentTimeMillis())
                     addResult(device, flashResult)
@@ -720,6 +745,11 @@ class MainPanelTestingSuite(
                 switchboard.enableDevice(mapDeviceToSwitchboard(i))
                 sleep(powerBalanceTimeMS)
 
+                val fault1 = switchboard.isPowerFault()
+                val pwr1 = actionTestVBUS_PWROK_1.action(!fault1,
+                    if(fault1) "VBUS Power fault: over-current detected" else "Power OK", System.currentTimeMillis())
+                addResult(device, pwr1)
+
                 val vbus = actionTestVBUS_REF.action(adcProvider.getVBUSVoltage(), "", System.currentTimeMillis())
                 addResult(device, vbus)
 
@@ -739,6 +769,11 @@ class MainPanelTestingSuite(
                     val full = actionTestVBUS_FULL.action(adcProvider.getFullVoltage(), "", System.currentTimeMillis())
                     addResult(device, full)
                 }
+
+                val fault2 = switchboard.isPowerFault()
+                val pwr2 = actionTestVBUS_PWROK_1.action(!fault2,
+                    if(fault2) "VBUS Power fault: over-current detected" else "Power OK", System.currentTimeMillis())
+                addResult(device, pwr2)
 
                 switchboard.disableAll()
             }
@@ -766,6 +801,11 @@ class MainPanelTestingSuite(
                 switchboard.enableDevice(mapDeviceToSwitchboard(i))
                 sleep(powerBalanceTimeMS)
 
+                val fault1 = switchboard.isPowerFault()
+                val pwr1 = actionTestVBUS_PWROK_1.action(!fault1,
+                    if(fault1) "BAT Power fault: over-current detected" else "Power OK", System.currentTimeMillis())
+                addResult(device, pwr1)
+
                 val bat = actionTestBAT_REF.action(adcProvider.getBatVoltage(), "", System.currentTimeMillis())
                 addResult(device, bat)
 
@@ -785,6 +825,11 @@ class MainPanelTestingSuite(
                     val full = actionTestBAT_FULL.action(adcProvider.getFullVoltage(), "", System.currentTimeMillis())
                     addResult(device, full)
                 }
+
+                val fault2 = switchboard.isPowerFault()
+                val pwr2 = actionTestVBUS_PWROK_1.action(!fault2,
+                    if(fault2) "BAT Power fault: over-current detected" else "Power OK", System.currentTimeMillis())
+                addResult(device, pwr2)
 
                 switchboard.disableAll()
             }
