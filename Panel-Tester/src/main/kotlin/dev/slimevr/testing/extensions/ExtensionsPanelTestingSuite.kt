@@ -75,7 +75,7 @@ class ExtensionsPanelTestingSuite(
                     return
             }
             for(line in nonBlank) {
-                if(line.contains("Scanning BNO085s..."))
+                if(line.contains("Scanning BNO085s...") || line.contains("Scanning ICM-45686s..."))
                     clearDevices(right)
                 val match = lineRegex.matchEntire(line)
                 if(match != null) {

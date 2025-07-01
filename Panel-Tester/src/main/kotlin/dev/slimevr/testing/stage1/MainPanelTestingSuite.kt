@@ -30,7 +30,7 @@ class MainPanelTestingSuite(
     private val serialBootTimeMS = 200L
     private val bootTimeMS = 1500L
     private val resetTimeMS = 300L
-    private val FIRMWARE_BUILD = 20
+    private val FIRMWARE_BUILD = 21
     private val TEST_CHRG_DIODE_VOLTAGES = false
     private val RETRIES = 5
 
@@ -233,21 +233,26 @@ class MainPanelTestingSuite(
     private fun testMagnetometer(device: DeviceTest) {
         statusLogger.info("[${device.deviceNum + 1}] Testing Magnetometer...")
         val startTime = System.currentTimeMillis()
-        val testI2C = SerialMatchingAction(
-            "Test Magnetometer",
-            arrayOf(
-                """\[INFO ] \[MagDriver] Found mag of type QMC6309, initializing!""".toRegex(),
-            ),
-            arrayOf(
-                "ERR".toRegex(),
-                "FATAL".toRegex(),
-                "\\[INFO ] \\[MagDriver] No mag found!".toRegex()
-            ),
-            device,
-            30000
-        )
-        val result = testI2C.action("", "", startTime)
-        addResult(device, result)
+        if (device.testStatus == TestStatus.ERROR) {
+            logger.warning("[${device.deviceNum + 1}] Skipped due to previous error")
+        } else {
+            val testI2C = SerialMatchingAction(
+                "Test Magnetometer",
+                arrayOf(
+                    """.*Sensor\[0] magnetometer: QMC6309""".toRegex(),
+                ),
+                arrayOf(
+                    ".*ERR.*".toRegex(),
+                    ".*FATAL.*".toRegex(),
+                    ".*No mag found.*".toRegex(),
+                    """.*Sensor\[0] has no magnetometer attached""".toRegex(),
+                ),
+                device,
+                30000
+            )
+            val result = testI2C.action("", "", startTime)
+            addResult(device, result)
+        }
     }
 
     private fun testIMU(device: DeviceTest) {
@@ -357,6 +362,7 @@ class MainPanelTestingSuite(
                     // Not doing I2C test because it requires catching the boot seq
                     //testI2C(device)
                     getTest(device)
+                    testMagnetometer(device)
                     testIMU(device)
                     // Todo: add mag test after we have it implemented
                     // testMag(device)

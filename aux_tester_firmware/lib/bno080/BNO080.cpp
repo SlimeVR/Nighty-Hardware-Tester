@@ -12,7 +12,6 @@
 
   This library handles the initialization of the BNO080 and is able to query the sensor
   for different readings.
-
   https://github.com/sparkfun/SparkFun_BNO080_Arduino_Library
 
   Development environment specifics:
@@ -43,15 +42,15 @@
 
 //Attempt communication with the device
 //Return true if we got a 'Polo' back from Marco
-boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, PinReader* intPinReader)
+boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, PinInterface* intPin)
 {
 	_deviceAddress = deviceAddress; //If provided, store the I2C address from user
 	_i2cPort = &wirePort;			//Grab which port the user wants us to use
-	_int = intPinReader;					//Get the pin that the user wants to use for interrupts. By default, it's 255 and we'll not use it in dataAvailable() function.
-	//if (_int != 255)
-	//{
-	//	pinMode(_int, INPUT_PULLUP);
-	//}
+	_int = intPin;					//Get the pin that the user wants to use for interrupts. By default, it's 255 and we'll not use it in dataAvailable() function.
+	if (_int != nullptr)
+	{
+		_int->pinMode(INPUT_PULLUP);
+	}
 
 	//We expect caller to begin their I2C port, with the speed of their choice external to the library
 	//But if they forget, we start the hardware here.
@@ -71,7 +70,7 @@ boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, PinReader* intPi
 	bool tBoardInfoReceived = false;
 
 	// Wait max 2.5s for the product_id_response and ignore other packets received during that time.
-	while (millis() - tInitialResetTimeMS < 500 && (!tBoardInfoReceived)) {
+	while (millis() - tInitialResetTimeMS < 2500 && (!tBoardInfoReceived)) {
 		receivePacket();
 		if (shtpHeader[2] == 2 && shtpData[0] == SHTP_REPORT_PRODUCT_ID_RESPONSE) {
 			tBoardInfoReceived = true;
@@ -99,7 +98,7 @@ boolean BNO080::begin(uint8_t deviceAddress, TwoWire &wirePort, PinReader* intPi
 	return tBoardInfoReceived;
 }
 
-boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, PinReader* intPinReader, uint8_t user_RSTPin, uint32_t spiPortSpeed, SPIClass &spiPort)
+boolean BNO080::beginSPI(PinInterface* user_CSPin, PinInterface* user_WAKPin, PinInterface* user_INTPin, PinInterface* user_RSTPin, uint32_t spiPortSpeed, SPIClass &spiPort)
 {
 	_i2cPort = NULL; //This null tells the send/receive functions to use SPI
 
@@ -111,21 +110,21 @@ boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, PinReader* int
 
 	_cs = user_CSPin;
 	_wake = user_WAKPin;
-	_int = intPinReader;
+	_int = user_INTPin;
 	_rst = user_RSTPin;
 
-	pinMode(_cs, OUTPUT);
-	pinMode(_wake, OUTPUT);
-	//pinMode(_int, INPUT_PULLUP);
-	pinMode(_rst, OUTPUT);
+	_cs->pinMode(OUTPUT);
+	_wake->pinMode(OUTPUT);
+	_int->pinMode(INPUT_PULLUP);
+	_rst->pinMode(OUTPUT);
 
-	digitalWrite(_cs, HIGH); //Deselect BNO080
+	_cs->digitalWrite(HIGH); //Deselect BNO080
 
 	//Configure the BNO080 for SPI communication
-	digitalWrite(_wake, HIGH); //Before boot up the PS0/WAK pin must be high to enter SPI mode
-	digitalWrite(_rst, LOW);   //Reset BNO080
+	_wake->digitalWrite(HIGH); //Before boot up the PS0/WAK pin must be high to enter SPI mode
+	_rst->digitalWrite(LOW);   //Reset BNO080
 	delay(2);				   //Min length not specified in datasheet?
-	digitalWrite(_rst, HIGH);  //Bring out of reset
+	_rst->digitalWrite(HIGH);  //Bring out of reset
 
 	//Wait for first assertion of INT before using WAK pin. Can take ~104ms
 	waitForSPI();
@@ -159,6 +158,7 @@ boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, PinReader* int
 	if (receivePacket() == true)
 	{
 		if (shtpData[0] == SHTP_REPORT_PRODUCT_ID_RESPONSE)
+		{
 			if (_printDebug == true)
 			{
 				_debugPort->print(F("SW Version Major: 0x"));
@@ -176,6 +176,7 @@ boolean BNO080::beginSPI(uint8_t user_CSPin, uint8_t user_WAKPin, PinReader* int
 				_debugPort->println(SW_Version_Patch, HEX);
 			}
 			return (true);
+		}
 	}
 
 	return (false); //Something went wrong
@@ -201,11 +202,11 @@ uint16_t BNO080::getReadings(void)
 	//If we have an interrupt pin connection available, check if data is available.
 	//If int pin is not set, then we'll rely on receivePacket() to timeout
 	//See issue 13: https://github.com/sparkfun/SparkFun_BNO080_Arduino_Library/issues/13
-	//if (_int != nullptr)
-	//{
+	if (_int != nullptr)
+	{
 		if (_int->digitalRead() == HIGH)
 			return 0;
-	//}
+	}
 
 	if (receivePacket() == true)
 	{
@@ -220,7 +221,7 @@ uint16_t BNO080::getReadings(void)
 		}
 		else if(shtpHeader[2] == CHANNEL_GYRO)
 		{
-			return parseInputReport(); //This will update the rawAccelX, etc variables depending on which feature report is found
+		return parseInputReport(); //This will update the rawAccelX, etc variables depending on which feature report is found
 		}
 	}
 	return 0;
@@ -254,6 +255,13 @@ uint16_t BNO080::parseCommandReport(void)
 		if (command == COMMAND_ME_CALIBRATE)
 		{
 			calibrationStatus = shtpData[5 + 0]; //R0 - Status (0 = success, non-zero = fail)
+			_calibrationResponseStatus = shtpData[5 + 0];
+			_accelCalEnabled = shtpData[6 + 0];
+			_gyroCalEnabled = shtpData[7 + 0];
+			_magCalEnabled = shtpData[8 + 0];
+			_planarAccelCalEnabled = shtpData[9 + 0];
+			_onTableCalEnabled = shtpData[10 + 0];
+			_hasNewCalibrationStatus = true;
 		}
 		return shtpData[0];
 	}
@@ -276,12 +284,13 @@ uint16_t BNO080::parseCommandReport(void)
 //shtpData[5 + 0]: Then a feature report ID (0x01 for Accel, 0x05 for Rotation Vector)
 //shtpData[5 + 1]: Sequence number (See 6.5.18.2)
 //shtpData[5 + 2]: Status
-//shtpData[3]: Delay
-//shtpData[4:5]: i/accel x/gyro x/etc
-//shtpData[6:7]: j/accel y/gyro y/etc
-//shtpData[8:9]: k/accel z/gyro z/etc
-//shtpData[10:11]: real/gyro temp/etc
-//shtpData[12:13]: Accuracy estimate
+//shtpData[5 + 3]: Delay
+//shtpData[5 + 4:5]: i/accel x/gyro x/etc
+//shtpData[5 + 6:7]: j/accel y/gyro y/etc
+//shtpData[5 + 8:9]: k/accel z/gyro z/etc
+//shtpData[5 + 10:11]: real/gyro temp/etc
+//shtpData[5 + 12:13]: Accuracy estimate: Raw Accel/Gyro/Mag Timestap part1
+//shtpData[5 + 14:15]: Raw Accel/Gyro/Mag Timestap part2
 uint16_t BNO080::parseInputReport(void)
 {
 	//Calculate the number of data bytes in this packet
@@ -302,7 +311,7 @@ uint16_t BNO080::parseInputReport(void)
 		rawFastGyroX = (uint16_t)shtpData[9] << 8 | shtpData[8];
 		rawFastGyroY = (uint16_t)shtpData[11] << 8 | shtpData[10];
 		rawFastGyroZ = (uint16_t)shtpData[13] << 8 | shtpData[12];
-
+		hasNewFastGyro_ = true;
 		return SENSOR_REPORTID_GYRO_INTEGRATED_ROTATION_VECTOR;
 	}
 
@@ -312,6 +321,7 @@ uint16_t BNO080::parseInputReport(void)
 	uint16_t data3 = (uint16_t)shtpData[5 + 9] << 8 | shtpData[5 + 8];
 	uint16_t data4 = 0;
 	uint16_t data5 = 0; //We would need to change this to uin32_t to capture time stamp value on Raw Accel/Gyro/Mag reports
+	uint32_t memstimeStamp = 0; //Timestamp of MEMS sensor reading
 
 	if (dataLength - 5 > 9)
 	{
@@ -320,6 +330,11 @@ uint16_t BNO080::parseInputReport(void)
 	if (dataLength - 5 > 11)
 	{
 		data5 = (uint16_t)shtpData[5 + 13] << 8 | shtpData[5 + 12];
+	}
+	//only for Raw Reports 0x14, 0x15, 0x16
+	if (dataLength - 5 >= 15)
+	{
+		memstimeStamp = ((uint32_t)shtpData[5 + 15] << (8 * 3)) | ((uint32_t)shtpData[5 + 14] << (8 * 2)) | ((uint32_t)shtpData[5 + 13] << (8 * 1)) | ((uint32_t)shtpData[5 + 12] << (8 * 0));
 	}
 
 	//Store these generic values to their proper global variable
@@ -333,6 +348,7 @@ uint16_t BNO080::parseInputReport(void)
 	}
 	else if (shtpData[5] == SENSOR_REPORTID_LINEAR_ACCELERATION)
 	{
+		hasNewLinAccel_ = true;
 		accelLinAccuracy = status;
 		rawLinAccelX = data1;
 		rawLinAccelY = data2;
@@ -340,6 +356,7 @@ uint16_t BNO080::parseInputReport(void)
 	}
 	else if (shtpData[5] == SENSOR_REPORTID_GYROSCOPE)
 	{
+		hasNewGyro_ = true;
 		gyroAccuracy = status;
 		rawGyroX = data1;
 		rawGyroY = data2;
@@ -347,6 +364,7 @@ uint16_t BNO080::parseInputReport(void)
 	}
 	else if (shtpData[5] == SENSOR_REPORTID_MAGNETIC_FIELD)
 	{
+		hasNewMag_ = true;
 		magAccuracy = status;
 		rawMagX = data1;
 		rawMagY = data2;
@@ -409,21 +427,28 @@ uint16_t BNO080::parseInputReport(void)
 	}
 	else if (shtpData[5] == SENSOR_REPORTID_RAW_ACCELEROMETER)
 	{
+		hasNewRawAccel_ = true;
 		memsRawAccelX = data1;
 		memsRawAccelY = data2;
 		memsRawAccelZ = data3;
+		memsAccelTimeStamp = memstimeStamp;
 	}
 	else if (shtpData[5] == SENSOR_REPORTID_RAW_GYROSCOPE)
 	{
+		hasNewRawGyro_ = true;
 		memsRawGyroX = data1;
 		memsRawGyroY = data2;
 		memsRawGyroZ = data3;
+		memsRawGyroTemp = data4;
+		memsGyroTimeStamp = memstimeStamp;
 	}
 	else if (shtpData[5] == SENSOR_REPORTID_RAW_MAGNETOMETER)
 	{
+		hasNewRawMag_ = true;
 		memsRawMagX = data1;
 		memsRawMagY = data2;
 		memsRawMagZ = data3;
+		memsMagTimeStamp = memstimeStamp;
 	}
 	else if (shtpData[5] == SHTP_REPORT_COMMAND_RESPONSE)
 	{
@@ -543,6 +568,16 @@ void BNO080::getQuat(float &i, float &j, float &k, float &real, float &radAccura
 	hasNewQuaternion = false;
 }
 
+bool BNO080::getNewQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy)
+{
+	if (hasNewQuaternion)
+	{
+		getQuat(i, j, k, real, radAccuracy, accuracy);
+		return true;
+	}
+	return false;
+}
+
 void BNO080::getGameQuat(float &i, float &j, float &k, float &real, uint8_t &accuracy)
 {
 	i = qToFloat(rawGameQuatI, rotationVector_Q1);
@@ -551,6 +586,16 @@ void BNO080::getGameQuat(float &i, float &j, float &k, float &real, uint8_t &acc
 	real = qToFloat(rawGameQuatReal, rotationVector_Q1);
 	accuracy = quatGameAccuracy;
 	hasNewGameQuaternion = false;
+}
+
+bool BNO080::getNewGameQuat(float &i, float &j, float &k, float &real, uint8_t &accuracy)
+{
+	if (hasNewGameQuaternion)
+	{
+		getGameQuat(i, j, k, real, accuracy);
+		return true;
+	}
+	return false;
 }
 
 void BNO080::getMagQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy)
@@ -562,6 +607,16 @@ void BNO080::getMagQuat(float &i, float &j, float &k, float &real, float &radAcc
 	radAccuracy = qToFloat(rawMagQuatRadianAccuracy, rotationVector_Q1);
 	accuracy = quatMagAccuracy;
 	hasNewMagQuaternion = false;
+}
+
+bool BNO080::getNewMagQuat(float &i, float &j, float &k, float &real, float &radAccuracy, uint8_t &accuracy)
+{
+	if (hasNewMagQuaternion)
+	{
+		getMagQuat(i, j, k, real, radAccuracy, accuracy);
+		return true;
+	}
+	return false;
 }
 
 bool BNO080::hasNewQuat() {
@@ -632,6 +687,16 @@ void BNO080::getAccel(float &x, float &y, float &z, uint8_t &accuracy)
 	hasNewAccel_ = false;
 }
 
+bool BNO080::getNewAccel(float &x, float &y, float &z, uint8_t &accuracy)
+{
+	if (hasNewAccel_)
+	{
+		getAccel(x, y, z, accuracy);
+		return true;
+	}
+	return false;
+}
+
 //Return the acceleration component
 float BNO080::getAccelX()
 {
@@ -669,6 +734,21 @@ void BNO080::getLinAccel(float &x, float &y, float &z, uint8_t &accuracy)
 	y = qToFloat(rawLinAccelY, linear_accelerometer_Q1);
 	z = qToFloat(rawLinAccelZ, linear_accelerometer_Q1);
 	accuracy = accelLinAccuracy;
+	hasNewLinAccel_ = false;
+}
+
+bool BNO080::getNewLinAccel(float &x, float &y, float &z, uint8_t &accuracy)
+{
+	if (hasNewLinAccel_)
+	{
+		getLinAccel(x, y, z, accuracy);
+		return true;
+	}
+	return false;
+}
+
+bool BNO080::hasNewLinAccel() {
+	return hasNewLinAccel_;
 }
 
 //Return the acceleration component
@@ -706,6 +786,7 @@ void BNO080::getGyro(float &x, float &y, float &z, uint8_t &accuracy)
 	y = qToFloat(rawGyroY, gyro_Q1);
 	z = qToFloat(rawGyroZ, gyro_Q1);
 	accuracy = gyroAccuracy;
+	hasNewGyro_ = false;
 }
 
 //Return the gyro component
@@ -735,6 +816,10 @@ uint8_t BNO080::getGyroAccuracy()
 	return (gyroAccuracy);
 }
 
+bool BNO080::hasNewGyro() {
+	return hasNewGyro_;
+}
+
 //Gets the full mag vector
 //x,y,z output floats
 void BNO080::getMag(float &x, float &y, float &z, uint8_t &accuracy)
@@ -743,6 +828,7 @@ void BNO080::getMag(float &x, float &y, float &z, uint8_t &accuracy)
 	y = qToFloat(rawMagY, magnetometer_Q1);
 	z = qToFloat(rawMagZ, magnetometer_Q1);
 	accuracy = magAccuracy;
+	hasNewMag_=false;
 }
 
 //Return the magnetometer component
@@ -770,6 +856,10 @@ float BNO080::getMagZ()
 uint8_t BNO080::getMagAccuracy()
 {
 	return (magAccuracy);
+}
+
+bool BNO080::hasNewMag() {
+	return hasNewMag_;
 }
 
 //Gets the full high rate gyro vector
@@ -800,6 +890,10 @@ float BNO080::getFastGyroZ()
 {
 	float gyro = qToFloat(rawFastGyroZ, angular_velocity_Q1);
 	return (gyro);
+}
+
+bool BNO080::hasNewFastGyro() {
+	return hasNewFastGyro_;
 }
 
 //Return the tap detector
@@ -855,6 +949,29 @@ int16_t BNO080::getRawAccelZ()
 	return (memsRawAccelZ);
 }
 
+void BNO080::getRawAccel(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp)
+{
+	x = memsRawAccelX;
+	y = memsRawAccelY;
+	z = memsRawAccelZ;
+	timeStamp = memsAccelTimeStamp;
+	hasNewRawAccel_ = false;
+}
+
+bool BNO080::getNewRawAccel(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp)
+{
+	if (hasNewRawAccel_)
+	{
+		getRawAccel(x, y, z, timeStamp);
+		return true;
+	}
+	return false;
+}
+
+bool BNO080::hasNewRawAccel() {
+	return hasNewRawAccel_;
+}
+
 //Return raw mems value for the gyro
 int16_t BNO080::getRawGyroX()
 {
@@ -869,6 +986,42 @@ int16_t BNO080::getRawGyroZ()
 	return (memsRawGyroZ);
 }
 
+// From https://github.com/ceva-dsp/sh2/issues/15
+// Raw gyro temperature for BNO085 uses BMI055 gyro
+// memsRawGyroTemp is in 23°C + 0.5°C/LSB
+float BNO080::getGyroTemp()
+{
+	return (23.0 + (0.5f * memsRawGyroTemp));
+}
+
+void BNO080::resetNewRawGyro()
+{
+	hasNewRawGyro_ = false;
+}
+
+void BNO080::getRawGyro(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp)
+{
+	x = memsRawGyroX;
+	y = memsRawGyroY;
+	z = memsRawGyroZ;
+	timeStamp = memsGyroTimeStamp;
+	hasNewRawGyro_ = false;
+}
+
+bool BNO080::getNewRawGyro(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp)
+{
+	if (hasNewRawGyro_)
+	{
+		getRawGyro(x, y, z, timeStamp);
+		return true;
+	}
+	return false;
+}
+
+bool BNO080::hasNewRawGyro() {
+	return hasNewRawGyro_;
+}
+
 //Return raw mems value for the mag
 int16_t BNO080::getRawMagX()
 {
@@ -881,6 +1034,29 @@ int16_t BNO080::getRawMagY()
 int16_t BNO080::getRawMagZ()
 {
 	return (memsRawMagZ);
+}
+
+void BNO080::getRawMag(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp)
+{
+	x = memsRawMagX;
+	y = memsRawMagY;
+	z = memsRawMagZ;
+	timeStamp = memsMagTimeStamp;
+	hasNewRawMag_ = false;
+}
+
+bool BNO080::getNewRawMag(int16_t &x, int16_t &y, int16_t &z, uint32_t &timeStamp)
+{
+	if (hasNewRawMag_)
+	{
+		getRawMag(x, y, z, timeStamp);
+		return true;
+	}
+	return false;
+}
+
+bool BNO080::hasNewRawMag() {
+	return hasNewRawMag_;
 }
 
 //Given a record ID, read the Q1 value from the metaData record in the FRS (ya, it's complicated)
@@ -1036,7 +1212,7 @@ bool BNO080::readFRSdata(uint16_t recordID, uint8_t startLocation, uint8_t words
 // See 5.2.1 on BNO08X datasheet.
 // Wait For both of these packets specifically up to a max time and exit
 // after both packets are read or max waiting time is reached.
-void BNO080::waitForCompletedReset(void)
+void BNO080::waitForCompletedReset(uint32_t timeout)
 {
 	uint32_t tInitialResetTimeMS = millis();
 	bool tResetCompleteReceived = false;
@@ -1044,9 +1220,12 @@ void BNO080::waitForCompletedReset(void)
 	shtpHeader[2] = 0; // Make sure we aren't reading old data.
 	shtpData[0] = 0;
 
-	// Wait max 5s for the two packets. OR Until we get both reset responses.
-	while (millis() - tInitialResetTimeMS < 5000 &&
+	// Wait requested timeout for the two packets. OR Until we get both reset responses.
+	while (millis() - tInitialResetTimeMS < timeout &&
 	       (!tResetCompleteReceived || !tUnsolicitedResponseReceived)) {
+		#ifdef ESP8266
+			ESP.wdtFeed();
+		#endif
 		receivePacket();
 		if (shtpHeader[2] == 1 && shtpData[0] == 0x01) {
 			tResetCompleteReceived = true;
@@ -1059,17 +1238,18 @@ void BNO080::waitForCompletedReset(void)
 
 //Send command to reset IC
 //Read all advertisement packets from sensor
-//The sensor has been seen to reset twice if we attempt too much too quickly.
-//This seems to work reliably.
 void BNO080::softReset(void)
 {
+	// after power-on sensor is resetting by itself
+	// let's handle that POTENTIAL reset with shorter timeout
+	// in case sensor was not resetted - like after issuing RESET command
+	waitForCompletedReset(1000);
 	shtpData[0] = 1; //Reset
 
 	//Attempt to start communication with sensor
 	sendPacket(CHANNEL_EXECUTABLE, 1); //Transmit packet on channel 1, 1 byte
-
-	waitForCompletedReset();
-	waitForCompletedReset();
+	// now that reset should occur for sure, so let's try with longer timeout
+	waitForCompletedReset(5000);
 }
 
 //Set the operating mode to "On"
@@ -1270,39 +1450,9 @@ void BNO080::enableActivityClassifier(uint16_t timeBetweenReports, uint32_t acti
 	setFeatureCommand(SENSOR_REPORTID_PERSONAL_ACTIVITY_CLASSIFIER, timeBetweenReports, activitiesToEnable);
 }
 
-//Sends the commands to begin calibration of the accelerometer
-void BNO080::calibrateAccelerometer()
-{
-	sendCalibrateCommand(CALIBRATE_ACCEL);
-}
-
-//Sends the commands to begin calibration of the gyro
-void BNO080::calibrateGyro()
-{
-	sendCalibrateCommand(CALIBRATE_GYRO);
-}
-
-//Sends the commands to begin calibration of the magnetometer
-void BNO080::calibrateMagnetometer()
-{
-	sendCalibrateCommand(CALIBRATE_MAG);
-}
-
-//Sends the commands to begin calibration of the planar accelerometer
-void BNO080::calibratePlanarAccelerometer()
-{
-	sendCalibrateCommand(CALIBRATE_PLANAR_ACCEL);
-}
-
-//See 2.2 of the Calibration Procedure document 1000-4044
-void BNO080::calibrateAll()
-{
-	sendCalibrateCommand(CALIBRATE_ACCEL_GYRO_MAG);
-}
-
 void BNO080::endCalibration()
 {
-	sendCalibrateCommand(CALIBRATE_STOP); //Disables all calibrations
+	sendCalibrateCommand(0); //Disables all calibrations
 }
 
 //See page 51 of reference manual - ME Calibration Response
@@ -1374,40 +1524,38 @@ void BNO080::sendCommand(uint8_t command)
 
 //This tells the BNO080 to begin calibrating
 //See page 50 of reference manual and the 1000-4044 calibration doc
+//The argument is a set of binary flags see SH2_CAL_ACCEL
 void BNO080::sendCalibrateCommand(uint8_t thingToCalibrate)
 {
-	/*shtpData[3] = 0; //P0 - Accel Cal Enable
-	shtpData[4] = 0; //P1 - Gyro Cal Enable
+	/*
+	shtpData[3] = 0; //P0 - Accel Cal Enable
+	shtpData[4] = 0; //P1 - Gyro In-Hand Cal Enable
 	shtpData[5] = 0; //P2 - Mag Cal Enable
 	shtpData[6] = 0; //P3 - Subcommand 0x00
 	shtpData[7] = 0; //P4 - Planar Accel Cal Enable
-	shtpData[8] = 0; //P5 - Reserved
+	shtpData[8] = 0; //P5 - Gyro On-Table Cal Enable
 	shtpData[9] = 0; //P6 - Reserved
 	shtpData[10] = 0; //P7 - Reserved
-	shtpData[11] = 0; //P8 - Reserved*/
+	shtpData[11] = 0; //P8 - Reserved
+	*/
 
 	for (uint8_t x = 3; x < 12; x++) //Clear this section of the shtpData array
 		shtpData[x] = 0;
 
-	if (thingToCalibrate == CALIBRATE_ACCEL)
+	if ((thingToCalibrate & SH2_CAL_ACCEL) > 1)
 		shtpData[3] = 1;
-	else if (thingToCalibrate == CALIBRATE_GYRO)
+	if ((thingToCalibrate & SH2_CAL_GYRO_IN_HAND) > 1)
 		shtpData[4] = 1;
-	else if (thingToCalibrate == CALIBRATE_MAG)
+	if ((thingToCalibrate & SH2_CAL_MAG) > 1)
 		shtpData[5] = 1;
-	else if (thingToCalibrate == CALIBRATE_PLANAR_ACCEL)
+	if ((thingToCalibrate & SH2_CAL_PLANAR) > 1)
 		shtpData[7] = 1;
-	else if (thingToCalibrate == CALIBRATE_ACCEL_GYRO_MAG)
-	{
-		shtpData[3] = 1;
-		shtpData[4] = 1;
-		shtpData[5] = 1;
-	}
-	else if (thingToCalibrate == CALIBRATE_STOP)
-		; //Do nothing, bytes are set to zero
+	if ((thingToCalibrate & SH2_CAL_ON_TABLE) > 1)
+		shtpData[8] = 1;
 
 	//Make the internal calStatus variable non-zero (operation failed) so that user can test while we wait
 	calibrationStatus = 1;
+	_hasNewCalibrationStatus  = false;
 
 	//Using this shtpData packet, send a command
 	sendCommand(COMMAND_ME_CALIBRATE);
@@ -1431,7 +1579,7 @@ void BNO080::requestCalibrationStatus()
 		shtpData[x] = 0;
 
 	shtpData[6] = 0x01; //P3 - 0x01 - Subcommand: Get ME Calibration
-
+	_hasNewCalibrationStatus  = false;
 	//Using this shtpData packet, send a command
 	sendCommand(COMMAND_ME_CALIBRATE);
 }
@@ -1456,6 +1604,43 @@ void BNO080::saveCalibration()
 	//Using this shtpData packet, send a command
 	sendCommand(COMMAND_DCD); //Save DCD command
 }
+
+void BNO080::saveCalibrationPeriodically(bool save)
+{
+	/*shtpData[3] = 0; //P0 - Enable/Disable Periodic DCD Save
+	shtpData[4] = 0; //P1 - Reserved
+	shtpData[5] = 0; //P2 - Reserved
+	shtpData[6] = 0; //P3 - Reserved
+	shtpData[7] = 0; //P4 - Reserved
+	shtpData[8] = 0; //P5 - Reserved
+	shtpData[9] = 0; //P6 - Reserved
+	shtpData[10] = 0; //P7 - Reserved
+	shtpData[11] = 0; //P8 - Reserved*/
+
+	for (uint8_t x = 3; x < 12; x++) //Clear this section of the shtpData array
+		shtpData[x] = 0;
+	shtpData[3] = save ? 1 : 0;
+
+	//Using this shtpData packet, send a command
+	sendCommand(COMMAND_DCD_PERIOD_SAVE); //Save DCD command
+}
+
+bool BNO080::hasNewCalibrationStatus()
+{
+	return _hasNewCalibrationStatus;
+}
+
+void BNO080::getCalibrationStatus(uint8_t &calibrationResponseStatus, uint8_t &accelCalEnabled, uint8_t &gyroCalEnabled, uint8_t &magCalEnabled, uint8_t &planarAccelCalEnabled, uint8_t &onTableCalEnabled)
+{
+	_hasNewCalibrationStatus = false;
+	calibrationResponseStatus = _calibrationResponseStatus;
+	accelCalEnabled = _accelCalEnabled;
+	gyroCalEnabled = _gyroCalEnabled;
+	magCalEnabled = _magCalEnabled;
+	planarAccelCalEnabled = _planarAccelCalEnabled;
+	onTableCalEnabled = _onTableCalEnabled;
+}
+
 
 //Wait a certain time for incoming I2C bytes before giving up
 //Returns false if failed
@@ -1513,7 +1698,7 @@ boolean BNO080::receivePacket(void)
 		//Get first four bytes to find out how much data we need to read
 
 		_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, SPI_MODE3));
-		digitalWrite(_cs, LOW);
+		_cs->digitalWrite(LOW);
 
 		//Get the first four bytes, aka the packet header
 		uint8_t packetLSB = _spiPort->transfer(0);
@@ -1548,7 +1733,7 @@ boolean BNO080::receivePacket(void)
 				shtpData[dataSpot] = incoming; //Store data into the shtpData array
 		}
 
-		digitalWrite(_cs, HIGH); //Release BNO080
+		_cs->digitalWrite(HIGH); //Release BNO080
 
 		_spiPort->endTransaction();
 		printPacket();
@@ -1654,7 +1839,7 @@ boolean BNO080::sendPacket(uint8_t channelNumber, uint8_t dataLength)
 		//BNO080 has max CLK of 3MHz, MSB first,
 		//The BNO080 uses CPOL = 1 and CPHA = 1. This is mode3
 		_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, SPI_MODE3));
-		digitalWrite(_cs, LOW);
+		_cs->digitalWrite(LOW);
 
 		//Send the 4 byte packet header
 		_spiPort->transfer(packetLength & 0xFF);			 //Packet length LSB
@@ -1668,7 +1853,7 @@ boolean BNO080::sendPacket(uint8_t channelNumber, uint8_t dataLength)
 			_spiPort->transfer(shtpData[i]);
 		}
 
-		digitalWrite(_cs, HIGH);
+		_cs->digitalWrite(HIGH);
 		_spiPort->endTransaction();
 	}
 	else //Do I2C

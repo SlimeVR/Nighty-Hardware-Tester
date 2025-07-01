@@ -1,6 +1,6 @@
 /*
     SlimeVR Code is placed under the MIT license
-    Copyright (c) 2024 Eiren Rain & SlimeVR contributors
+    Copyright (c) 2021 Eiren Rain
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -20,13 +20,15 @@
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 */
-#ifndef _H_PIN_READER_
-#define _H_PIN_READER_
 
-class PinReader
-{
-public:
-    virtual int digitalRead();
-};
+#ifndef _OTA_H_
+#define _OTA_H 1
 
-#endif // _H_PIN_READER_
+#include <ArduinoOTA.h>
+
+namespace OTA {
+    void otaSetup(const char * const otaPassword);
+    void otaUpdate();
+}
+
+#endif // _OTA_H_

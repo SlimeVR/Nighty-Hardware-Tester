@@ -20,24 +20,18 @@
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 */
-#ifndef _H_MCP23X17PinReader_
-#define _H_MCP23X17PinReader_
+#pragma once
 
-#include <PinReader.h>
-#include <Adafruit_MCP23X17.h>
+#include <cstdint>
+#include <string>
 
-class MCP23X17PinReader: public PinReader
+class PinInterface
 {
-
 public:
-    MCP23X17PinReader(Adafruit_MCP23X17* mcp, uint8_t pin)
-        : mcp23x17(mcp), pinNum(pin) {};
+	virtual bool init() { return true; };
+	virtual int digitalRead() = 0;
+	virtual void pinMode(uint8_t mode) = 0;
+	virtual void digitalWrite(uint8_t val) = 0;
 
-    int digitalRead() override final;
-
-private:
-    Adafruit_MCP23X17* mcp23x17;
-    uint8_t pinNum;
+	[[nodiscard]] virtual std::string toString() const = 0;
 };
-
-#endif // _H_MCP23X17PinReader_

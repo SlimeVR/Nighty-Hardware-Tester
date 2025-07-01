@@ -21,6 +21,7 @@
     THE SOFTWARE.
 */
 
+#include "GlobalVars.h"
 #include "Wire.h"
 #include "globals.h"
 #include <i2cscan.h>
@@ -30,7 +31,32 @@
 #include "PCA9547.h"
 #include <CmdCallback.hpp>
 #include <memory>
-#include "MCP23X17PinReader.h"
+#include "sensorinterface/MCP23X17PinInterface.h"
+#include "sensorinterface/I2CWireSensorInterface.h"
+#include "sensors/softfusion/drivers/icm45686.h"
+#include "sensorinterface/SensorInterface.h"
+#include "sensorinterface/SensorInterfaceManager.h"
+#include "sensorinterface/i2cimpl.h"
+#include "sensors/softfusion/softfusionsensor.h"
+
+#if USE_RUNTIME_CALIBRATION
+#include "sensors/softfusion/runtimecalibration/RuntimeCalibration.h"
+#define SFCALIBRATOR SlimeVR::Sensors::RuntimeCalibration::RuntimeCalibrator
+#else
+#include "sensors/softfusion/SoftfusionCalibration.h"
+#define SFCALIBRATOR SlimeVR::Sensors::SoftfusionCalibrator
+#endif
+
+Timer<> globalTimer;
+SlimeVR::Logging::Logger logger("SlimeVR");
+SlimeVR::Sensors::SensorManager sensorManager;
+SlimeVR::LEDManager ledManager;
+SlimeVR::Status::StatusManager statusManager;
+SlimeVR::Configuration::Configuration configuration;
+SlimeVR::Network::Manager networkManager;
+SlimeVR::Network::Connection networkConnection;
+
+using ICM45686 = SlimeVR::Sensors::SoftFusion::Drivers::ICM45686;
 
 #define IMU_TIMEOUT 300
 #define INT_PIN 10
@@ -40,8 +66,6 @@
 #define I2C_SCL 0
 #define LED_RED 3
 #define LED_GREEN 4
-
-SlimeVR::Logging::Logger logger("SlimeVR");
 
 unsigned long imuConnected;
 Sensor *m_Sensor1;
@@ -53,28 +77,30 @@ CmdBuffer<256> cmdBuffer;
 bool start = false;
 bool justStarted = false;
 
-struct ImuTestSettings {
+struct ImuTestSettings
+{
     bool i2cSelectEnabled;
     uint8_t i2cSelectChannel;
     uint8_t i2cAddress;
     uint8_t intPinGP;
-    std::unique_ptr<PinReader> intPin;
+    std::unique_ptr<PinInterface> intPin;
 };
 
 ImuTestSettings imus[] = {
-    {false, 0, 0x4a ^ 0x02, 6, nullptr},
-    {false, 0, 0x4b ^ 0x02, 2, nullptr},
-    {true, 0, 0x4a, 8, nullptr},
-    {true, 0, 0x4b, 9, nullptr},
-    {true, 1, 0x4a, 10, nullptr},
-    {true, 1, 0x4b, 11, nullptr},
-    {true, 2, 0x4a, 12, nullptr},
-    {true, 2, 0x4b, 13, nullptr},
-    {true, 3, 0x4a, 14, nullptr},
-    {true, 3, 0x4b, 1, nullptr},
+    {false, 0, (ICM45686::Address) ^ 0x02, 6, nullptr},
+    {false, 0, (ICM45686::Address + 1) ^ 0x02, 2, nullptr},
+    {true, 0, ICM45686::Address, 8, nullptr},
+    {true, 0, ICM45686::Address + 1, 9, nullptr},
+    {true, 1, ICM45686::Address, 10, nullptr},
+    {true, 1, ICM45686::Address + 1, 11, nullptr},
+    {true, 2, ICM45686::Address, 12, nullptr},
+    {true, 2, ICM45686::Address + 1, 13, nullptr},
+    {true, 3, ICM45686::Address, 14, nullptr},
+    {true, 3, ICM45686::Address + 1, 1, nullptr},
 };
 
-uint8_t i2cSelectorChannel(uint8_t ch) {
+uint8_t i2cSelectorChannel(uint8_t ch)
+{
     if (ch > 3)
         return 255U;
     Wire.beginTransmission(PCAADDR);
@@ -82,18 +108,20 @@ uint8_t i2cSelectorChannel(uint8_t ch) {
     return Wire.endTransmission();
 }
 
-
-uint8_t i2cSelectorDisable() {
+uint8_t i2cSelectorDisable()
+{
     Wire.beginTransmission(PCAADDR);
     Wire.write(0);
     return Wire.endTransmission();
 }
 
-void updateCommands() {
+void updateCommands()
+{
     cmdCallbacks.updateCmdProcessing(&cmdParser, &cmdBuffer, &Serial);
 }
 
-void cmdStart(CmdParser* parser) {
+void cmdStart(CmdParser *parser)
+{
     start = true;
 }
 
@@ -117,18 +145,20 @@ void setup()
     // For some unknown reason the I2C seem to be open on ESP32-C3 by default. Let's just close it before opening it again. (The ESP32-C3 only has 1 I2C.)
     Wire.end();
 #endif
-    Wire.begin(I2C_SDA, I2C_SCL); 
+    Wire.begin(I2C_SDA, I2C_SCL);
 
 #ifdef ESP8266
     Wire.setClockStretchLimit(150000L); // Default stretch limit 150mS
 #endif
 #ifdef ESP32 // Counterpart on ESP32 to ClockStretchLimit
-    //Wire.setTimeOut(150);
+    // Wire.setTimeOut(150);
 #endif
     Wire.setClock(I2C_SPEED);
 
-    if (!mcp.begin_I2C()) {
-        while (1) {
+    if (!mcp.begin_I2C())
+    {
+        while (1)
+        {
             logger.error("MCP initialization error.");
             I2CSCAN::scani2cports();
             delay(1000);
@@ -144,22 +174,23 @@ void setup()
     mcp.digitalWrite(LED_GREEN, LOW);
     cmdCallbacks.addCmd("START", &cmdStart);
 
-    for(uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = 0; i < 10; i++)
     {
-        ImuTestSettings* test = &imus[i];
+        ImuTestSettings *test = &imus[i];
         mcp.pinMode(test->intPinGP, INPUT_PULLUP);
-        test->intPin = std::make_unique<MCP23X17PinReader>(&mcp, test->intPinGP);
+        test->intPin = std::make_unique<MCP23X17PinInterface>(&mcp, test->intPinGP);
     }
 
     logger.info("Boot complete, awaiting button interrupt at A1");
 }
 
-void checkIfTrackersConnected() {
+void checkIfTrackersConnected()
+{
     bool found = false;
-    for(uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = 0; i < 10; i++)
     {
-        ImuTestSettings* test = &imus[i];
-        if(test->i2cSelectEnabled)
+        ImuTestSettings *test = &imus[i];
+        if (test->i2cSelectEnabled)
         {
             i2cSelectorChannel(test->i2cSelectChannel);
         }
@@ -169,26 +200,30 @@ void checkIfTrackersConnected() {
         }
         Wire.end();
         Wire.begin(I2C_SDA, I2C_SCL);
-        if(I2CSCAN::isI2CExist(test->i2cAddress))
+        if (I2CSCAN::hasDevOnBus(test->i2cAddress))
         {
             found = true;
             break;
         }
     }
-    if(found)
+    if (found)
     {
-        if(!justStarted)
+        if (!justStarted)
         {
             logger.info("Tracker connection auto-detected, starting test automatically");
             start = true;
         }
-    } else {
+    }
+    else
+    {
         justStarted = false;
     }
 }
 
 void loop()
 {
+    SlimeVR::I2CWireSensorInterface sensorInterface = SlimeVR::I2CWireSensorInterface(I2C_SDA, I2C_SCL);
+    sensorInterface.init();
     updateCommands();
     checkIfTrackersConnected();
     // enable interrupt on button_pin
@@ -203,17 +238,17 @@ void loop()
             start = false;
             justStarted = true;
             logger.info("Button pressed");
-            delay(250);  // debounce
-            if(start)
-                delay(1000); // Wait good connection
-            mcp.clearInterrupts();  // clear
-            logger.info("Scanning BNO085s...");
-            for(uint8_t i = 0; i < 10; i++)
+            delay(250); // debounce
+            if (start)
+                delay(1000);       // Wait good connection
+            mcp.clearInterrupts(); // clear
+            logger.info("Scanning ICM-45686s...");
+            for (uint8_t i = 0; i < 10; i++)
             {
                 bool imuFailed = false;
-                ImuTestSettings* test = &imus[i];
+                ImuTestSettings *test = &imus[i];
                 logger.info("[%d] Scanning: %s %d %d %d", i, (test->i2cSelectEnabled ? "true" : "false"), test->i2cSelectChannel, test->i2cAddress, test->intPinGP);
-                if(test->i2cSelectEnabled)
+                if (test->i2cSelectEnabled)
                 {
                     i2cSelectorChannel(test->i2cSelectChannel);
                 }
@@ -225,12 +260,15 @@ void loop()
                 Wire.end();
                 Wire.begin(I2C_SDA, I2C_SCL);
 #endif
-                if(I2CSCAN::isI2CExist(test->i2cAddress))
+                delay(50);
+                if (I2CSCAN::hasDevOnBus(test->i2cAddress))
                 {
                     logger.info("[%d] I2C Found", i);
-                    m_Sensor1 = new BNO080Sensor(i, IMU, test->i2cAddress, IMU_ROTATION, test->intPin.get());
+                    // m_Sensor1 = new BNO080Sensor(i, IMU, test->i2cAddress, IMU_ROTATION, test->intPin.get());
+                    SlimeVR::Sensors::I2CImpl imuInterface = SlimeVR::Sensors::I2CImpl(test->i2cAddress);
+                    m_Sensor1 = new SlimeVR::Sensors::SoftFusionSensor<SlimeVR::Sensors::SoftFusion::Drivers::ICM45686, SFCALIBRATOR>(i, imuInterface, IMU_ROTATION, &sensorInterface, test->intPin.get(), 0);
                     m_Sensor1->motionSetup();
-                    if(!m_Sensor1->isWorking())
+                    if (!m_Sensor1->isWorking())
                     {
                         logger.fatal("[%d] Initialization failed.", i);
                         logger.fatal("[%d] Test failed!", i);
@@ -250,32 +288,39 @@ void loop()
                     testFailed = true;
                     imuFailed = true;
                 }
-                while(!imuFailed)
+                while (!imuFailed)
                 {
                     m_Sensor1->motionLoop();
-                    if(m_Sensor1->isWorking() && m_Sensor1->hadData)
+                    if (m_Sensor1->isWorking() && m_Sensor1->getHadData())
                     {
                         logger.info(
                             "[%d] Sensor: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
                             i,
                             getIMUNameByType(m_Sensor1->getSensorType()),
-                            UNPACK_QUATERNION(m_Sensor1->getQuaternion()),
+                            UNPACK_QUATERNION(m_Sensor1->getFusedRotation()),
                             m_Sensor1->isWorking() ? "true" : "false",
-                            m_Sensor1->hadData ? "true" : "false"
-                        );
-                        logger.info("[%d] Test passed!", i);
+                            m_Sensor1->getHadData() ? "true" : "false");
+                        const char *mag = m_Sensor1->getAttachedMagnetometer();
+                        if (mag)
+                        {
+                            logger.info("[%d] Mag: %s", i, mag);
+                            logger.info("[%d] Test passed!", i);
+                        }
+                        else
+                        {
+                            logger.info("[%d] Test failed, no mag found", i);
+                        }
                         break;
                     }
-                    else if(millis() - imuConnected > IMU_TIMEOUT)
+                    else if (millis() - imuConnected > IMU_TIMEOUT)
                     {
                         logger.info(
                             "[%d] Sensor: %s (%.3f %.3f %.3f %.3f) is working: %s, had data: %s",
                             i,
                             getIMUNameByType(m_Sensor1->getSensorType()),
-                            UNPACK_QUATERNION(m_Sensor1->getQuaternion()),
+                            UNPACK_QUATERNION(m_Sensor1->getFusedRotation()),
                             m_Sensor1->isWorking() ? "true" : "false",
-                            m_Sensor1->hadData ? "true" : "false"
-                        );
+                            m_Sensor1->getHadData() ? "true" : "false");
                         logger.info("[%d] Test failed by timeout", i);
                         testFailed = true;
                         imuFailed = true;
@@ -285,7 +330,7 @@ void loop()
                 }
                 delay(50);
             }
-            if(testFailed)
+            if (testFailed)
             {
                 mcp.digitalWrite(LED_RED, HIGH);
                 logger.fatal("Test failed");
