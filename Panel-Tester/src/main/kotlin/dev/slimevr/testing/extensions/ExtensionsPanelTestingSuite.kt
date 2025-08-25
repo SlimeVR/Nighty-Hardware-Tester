@@ -26,7 +26,7 @@ class ExtensionsPanelTestingSuite(
     private val serialManager = SerialManager()
     private var leftHalf: SerialPort? = null
     private var rightHalf: SerialPort? = null
-    private var lineRegex = ".*\\[(\\d)].*".toRegex()
+    private var lineRegex = ".*\\[(-?\\d+)].*".toRegex()
 
     private val usbPortsMap = mapOf(
         Pair("1-2", false), Pair("3-2", true)
@@ -107,7 +107,9 @@ class ExtensionsPanelTestingSuite(
     }
 
     private fun toDevice(number: Int, isRight: Boolean): Int {
-        if(number < 5) {
+        if(number < 0) {
+            return -number
+        } else if(number < 5) {
             if(isRight)
                 return number + 5
             return number
