@@ -10,6 +10,7 @@ import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
+import dev.slimevr.testing.PanelTestingSuite
 import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.TestStatus
 import dev.slimevr.testing.destroy
@@ -101,7 +102,7 @@ class TesterUI(
         }.start()
     }
 
-    fun registerTestingSuite(suite: MainPanelTestingSuite) {
+    fun registerTestingSuite(suite: PanelTestingSuite) {
         window.addWindowListener(object: WindowListenerAdapter() {
             override fun onInput(basePane: Window?, keyStroke: KeyStroke?, deliverEvent: AtomicBoolean?) {
                 if(!suite.isReady())
@@ -136,10 +137,14 @@ class TesterUI(
                         suite.startTest(5, 6, 7, 8, 9)
                     }
                     lch == 't' -> {
-                        suite.transposeDevices()
-                        val failed = suite.getFailedDevices()
-                        if(failed.isNotEmpty()) {
-                            suite.startTest(*failed.toIntArray())
+                        // Rotate panel and retest
+                        // For Extensions and butterfly dongle panels
+                        if(suite is MainPanelTestingSuite) {
+                            suite.transposeDevices()
+                            val failed = suite.getFailedDevices()
+                            if (failed.isNotEmpty()) {
+                                suite.startTest(*failed.toIntArray())
+                            }
                         }
                     }
                     lch == '-' -> {

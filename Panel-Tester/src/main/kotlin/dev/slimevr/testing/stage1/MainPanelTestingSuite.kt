@@ -23,7 +23,7 @@ class MainPanelTestingSuite(
     private val devices: Int,
     private val logger: Logger,
     private var statusLogger: Logger
-) : Thread("Testing suit thread"), USBNotify {
+) : Thread("Testing suit thread"), PanelTestingSuite, USBNotify {
 
     private val powerBalanceTimeMS = 100L
     private val flashResetPinsMS = 200L
@@ -157,9 +157,9 @@ class MainPanelTestingSuite(
         }
     }
 
-    fun isReady() = isReady
+    override fun isReady() = isReady
 
-    fun startTest(vararg devices: Int) {
+    override fun startTest(vararg devices: Int) {
         synchronized(this) {
             if (isTesting)
                 return
@@ -169,7 +169,7 @@ class MainPanelTestingSuite(
         startTest = true
     }
 
-    fun btnPressed() {
+    override fun btnPressed() {
         btnPressed = true
     }
 
@@ -490,7 +490,7 @@ class MainPanelTestingSuite(
         }
     }
 
-    fun getFailedDevices(): List<Int> {
+    override fun getFailedDevices(): List<Int> {
         return deviceTests.filter { it.testStatus == TestStatus.ERROR }.map { it.deviceNum }
     }
 
