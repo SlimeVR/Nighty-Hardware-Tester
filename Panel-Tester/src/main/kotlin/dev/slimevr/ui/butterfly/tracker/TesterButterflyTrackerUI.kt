@@ -1,4 +1,4 @@
-package dev.slimevr.ui
+package dev.slimevr.ui.butterfly.tracker
 
 import com.googlecode.lanterna.TerminalSize
 import com.googlecode.lanterna.TextColor
@@ -12,13 +12,17 @@ import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.PanelTestingSuite
 import dev.slimevr.testing.RotatablePanelTestingSuite
-import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.TestStatus
 import dev.slimevr.testing.destroy
+import dev.slimevr.ui.LabelLogFormatter
+import dev.slimevr.ui.LabelLogHandler
+import dev.slimevr.ui.OnlyTextLogFormatter
+import dev.slimevr.ui.SlimyLabel
+import dev.slimevr.ui.TestingDeviceUI
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
 
-class TesterUI(
+class TesterButterflyTrackerUI(
     globalLogger: Logger,
     statusLogger: Logger
 ) {
@@ -27,8 +31,8 @@ class TesterUI(
     val statusLogHandler: LabelLogHandler
     val testedDevicesUI = mutableListOf<TestingDeviceUI>()
     val window = BasicWindow()
-    val secondRowLabel = Label("Controlling: FIRST row")
-    var secondRow = false
+    val secondRowLabel = Label("Controlling: FIRST column")
+    var secondColumn = false
 
     init {
         LogManager.removeNonFileHandlers()
@@ -44,14 +48,23 @@ class TesterUI(
         // Create panel to hold components
 
         val mainPanel = Panel()
-        mainPanel.setLayoutManager(GridLayout(5))
+        mainPanel.setLayoutManager(GridLayout(4))
 
         mainPanel.addComponent(
             secondRowLabel,
-            GridLayout.createHorizontallyFilledLayoutData(5)
+            GridLayout.createHorizontallyFilledLayoutData(4)
         )
 
-        for (i in 1..20) {
+        val placeholder = TestingDeviceUI(0, Panel(), EmptySpace(), Label(""), Label(""), null)
+        for (i in 1..20)
+            testedDevicesUI.add(placeholder)
+        val panels = arrayOf(
+            1, 6, 11, 16,
+            2, 7, 12, 17,
+            3, 8, 13, 18,
+            4, 9, 14, 19,
+            5, 10, 15, 20)
+        for (i in panels) {
             val testerPanel = Panel()
             val statusColorPanel = EmptySpace(TestStatus.DISCONNECTED.color,
                 TerminalSize(1, 1))
@@ -66,9 +79,9 @@ class TesterUI(
                 GridLayout.createHorizontallyFilledLayoutData()
             )
 
-            val deviceUI = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel, usbLabel)
-            testedDevicesUI.add(deviceUI)
+            testedDevicesUI[i - 1] = TestingDeviceUI(i, testerPanel, statusColorPanel, idLabel, usbLabel)
         }
+
         val logLabel = SlimyLabel("")
         logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
         fullLogHandler = LabelLogHandler(logLabel, 100)
@@ -78,7 +91,7 @@ class TesterUI(
             logLabel.withBorder(Borders.singleLine("Log")),
             GridLayout.createLayoutData(GridLayout.Alignment.FILL,
                 GridLayout.Alignment.FILL, false,
-                false, 4, 1)
+                false, 3, 1)
         )
 
         val statusLabel = SlimyLabel("")
@@ -122,7 +135,7 @@ class TesterUI(
                             device = 9
                         else
                             device -= 1
-                        if(secondRow)
+                        if(secondColumn)
                             device += 10
                         suite.startTest(device)
                     }
@@ -149,12 +162,12 @@ class TesterUI(
                         }
                     }
                     lch == '-' -> {
-                        secondRow = false
-                        secondRowLabel.text = "Controlling: FIRST row"
+                        secondColumn = false
+                        secondRowLabel.text = "Controlling: FIRST column"
                     }
                     lch == '+' -> {
-                        secondRow = true
-                        secondRowLabel.text = "Controlling: SECOND row"
+                        secondColumn = true
+                        secondRowLabel.text = "Controlling: SECOND column"
                     }
                     lch == 'g' -> {
                         suite.startTest(10, 11, 12, 13, 14)
@@ -185,6 +198,4 @@ class TesterUI(
             deviceUI.statusColorPanel.color = TestStatus.DISCONNECTED.color
         }
     }
-
-
 }

@@ -1,17 +1,10 @@
-package dev.slimevr.testing.stage5
+package dev.slimevr.testing.butterfly.tracker
 
-import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.Switchboard
 import dev.slimevr.hardware.serial.SerialManager
-import dev.slimevr.hardware.usb.USBDmesgWatcher
-import dev.slimevr.hardware.usb.USBNotify
 import dev.slimevr.testing.*
-import dev.slimevr.testing.actions.*
-import dev.slimevr.ui.TesterUI
-import java.io.FileReader
-import java.io.FileWriter
-import java.io.IOException
+import dev.slimevr.ui.butterfly.tracker.TesterButterflyTrackerUI
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -19,7 +12,7 @@ class ButterflyTrackerPanelTestingSuite(
     private val switchboard: Switchboard,
     private val adcProvider: ADCProvider,
     private val testingDatabases: List<TestingDatabase>,
-    private val testerUi: TesterUI,
+    private val testerUi: TesterButterflyTrackerUI,
     private val devices: Int,
     private val logger: Logger,
     private var statusLogger: Logger

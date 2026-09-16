@@ -23,7 +23,7 @@ class MainPanelTestingSuite(
     private val devices: Int,
     private val logger: Logger,
     private var statusLogger: Logger
-) : Thread("Testing suit thread"), PanelTestingSuite, USBNotify {
+) : Thread("Testing suit thread"), PanelTestingSuite, RotatablePanelTestingSuite, USBNotify {
 
     private val powerBalanceTimeMS = 100L
     private val flashResetPinsMS = 200L
@@ -517,7 +517,7 @@ class MainPanelTestingSuite(
         return false
     }
 
-    fun transposeDevices() {
+    override fun transposeDevices() {
         val tmp = mutableMapOf<Int, DeviceTest>()
         deviceTests.forEach {
             val newIndex = transposeDeviceIndex(it.deviceNum)
@@ -716,7 +716,7 @@ class MainPanelTestingSuite(
             return
         }
         testerUi.statusLogHandler.clear()
-        testerUi.clear()
+        testerUi.clearAll()
         deviceTests.clear()
         for (i in 0 until devices) {
             val device = DeviceTest(i)

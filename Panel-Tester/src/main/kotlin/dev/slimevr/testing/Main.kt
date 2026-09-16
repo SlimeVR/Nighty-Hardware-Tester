@@ -12,7 +12,8 @@ import dev.slimevr.testing.extensions.ExtensionsPanelTestingSuite
 import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.stage2.Stage2TestingSuite
 import dev.slimevr.testing.stage3.Stage3Updater
-import dev.slimevr.testing.stage5.ButterflyTrackerPanelTestingSuite
+import dev.slimevr.testing.butterfly.tracker.ButterflyTrackerPanelTestingSuite
+import dev.slimevr.ui.butterfly.tracker.TesterButterflyTrackerUI
 import dev.slimevr.ui.TesterUI
 import dev.slimevr.ui.extensions.ExtensionsUpdaterUI
 import dev.slimevr.ui.stage2.Stage2UI
@@ -40,7 +41,7 @@ fun main(args: Array<String>) {
     // Try adding program arguments via Run/Debug configuration.
     // Learn more about running applications: https://www.jetbrains.com/help/idea/running-applications.html.
     println("Program arguments: ${args.joinToString()}")
-    println("Test Rebuild 17")
+    println("Test Rebuild 20")
 
     val globalLogger = Logger.getLogger("")
     val statusLogger = Logger.getLogger("status")
@@ -86,7 +87,7 @@ fun main(args: Array<String>) {
         val i2CProvider: I2CProvider = pi4j!!.provider("linuxfs-i2c")
         val switchboard = Switchboard(pi4j!!)
         val adcProvider = ADCProvider(i2CProvider)
-        val testerUi = TesterUI(globalLogger, statusLogger)
+        val testerUi = TesterButterflyTrackerUI(globalLogger, statusLogger)
         val suite =
             ButterflyTrackerPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 20, globalLogger, statusLogger)
         suite.start()
