@@ -23,16 +23,18 @@ class SwitchboardStage5(
             BOTH
         }
 
-        var ON: Boolean = true
-        var OFF: Boolean = false
-        var ALL: Int = Int.MAX_VALUE
-    }
+        val CHANNELS : List<ChannelMode> = listOf(ChannelMode.A, ChannelMode.B)
 
-    private var enablePullUp = true
-    private var ledPullUp = false
-    private var defaultOutputState = DigitalState.LOW
-    private var defaultLedState = if (ledPullUp) DigitalState.LOW else DigitalState.HIGH
-    private var useResetPin = false
+        const val ON: Boolean = true
+        const val OFF: Boolean = false
+        const val ALL: Int = Int.MAX_VALUE
+
+        private val enablePullUp = true
+        private val ledPullUp = false
+        private val defaultOutputState = DigitalState.LOW
+        private val defaultLedState = if (ledPullUp) DigitalState.LOW else DigitalState.HIGH
+        private val useResetPin = false
+    }
 
     private var enablePins = arrayOf(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(26).provider("pigpio-digital-output").build(),
@@ -66,14 +68,8 @@ class SwitchboardStage5(
     private var enableChAPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(9).provider("pigpio-digital-output").build()
     private var enableChBPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(11).provider("pigpio-digital-output").build()
 
-    private var powerFaultPin =
-        pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.OFF).address(10)
-            .provider("pigpio-digital-input"))
-    private var sensePin =
-        pi4j.create(
-            DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.OFF).address(13)
-                .provider("pigpio-digital-input")
-        )
+    private var powerFaultPin = pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.OFF).address(10).provider("pigpio-digital-input"))
+    private var sensePin = pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.OFF).address(13).provider("pigpio-digital-input"))
 
     init {
         power(PowerMode.OFF)
@@ -90,6 +86,8 @@ class SwitchboardStage5(
     }
 
     /**
+     * Switch row by index (0-based)
+     *
      * Usage:
      * - device(1, ON)
      * - device(1, OFF)
@@ -108,8 +106,11 @@ class SwitchboardStage5(
     }
 
     fun isPowerFault() = powerFaultPin.isLow
-    fun isChannelPresent() = powerFaultPin.isLow
+    fun isChannelPresent() = sensePin.isLow
 
+    /**
+     * Select column A/B
+     */
     fun channel(mode: ChannelMode) {
         when(mode) {
             ChannelMode.OFF -> {
@@ -125,7 +126,7 @@ class SwitchboardStage5(
                 enableChBPin.high()
             }
             ChannelMode.BOTH -> {
-                // Can be powered but USB is disconnected
+                // Can be both powered but USB is disconnected
                 enableChAPin.high()
                 enableChBPin.high()
             }

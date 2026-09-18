@@ -10,6 +10,9 @@ import java.util.logging.Logger
 
 
 class DeviceTest(
+    /**
+     * Device index in a panel (0-based).
+     */
     var deviceNum: Int,
     val logger: Logger = Logger.getLogger("devices")
 ): SerialPortMessageListener {

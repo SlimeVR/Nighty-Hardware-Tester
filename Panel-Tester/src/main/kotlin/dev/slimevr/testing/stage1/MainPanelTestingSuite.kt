@@ -17,7 +17,7 @@ import java.util.logging.Logger
 
 class MainPanelTestingSuite(
     private val switchboard: Switchboard,
-    private val adcProvider: ADCProvider,
+    private val adc: ADCProvider,
     private val testingDatabases: List<TestingDatabase>,
     private val testerUi: TesterUI,
     private val devices: Int,
@@ -328,17 +328,24 @@ class MainPanelTestingSuite(
         }
     }
 
+    private fun get3v3Voltage(): Float = adc.ADS1X15_1.getVoltage(0u)
+    private fun getVCCVoltage(): Float = adc.ADS1X15_1.getVoltage(1u)
+    private fun getVBUSVoltage(): Float = adc.ADS1X15_1.getVoltage(2u)
+    private fun getBatVoltage(): Float = adc.ADS1X15_1.getVoltage(3u)
+    private fun getChrgVoltage(): Float = 0f //adc.ADS1X15_2.getVoltage(0u)
+    private fun getFullVoltage(): Float = 0f //adc.ADS1X15_2.getVoltage(1u)
+
     private fun selfTest() {
         switchboard.disableAll()
         switchboard.powerOff()
         sleep(powerBalanceTimeMS)
         logger.info("=== Testing suite self-test: ===")
-        logger.info("VBUS voltage: ${adcProvider.getVBUSVoltage()}")
-        logger.info("BAT voltage: ${adcProvider.getBatVoltage()}")
-        logger.info("3v3 voltage: ${adcProvider.get3v3Voltage()}")
-        logger.info("VCC voltage: ${adcProvider.getVCCVoltage()}")
-        logger.info("Chrg voltage: ${adcProvider.getChrgVoltage()}")
-        logger.info("Full voltage: ${adcProvider.getFullVoltage()}")
+        logger.info("VBUS voltage: ${getVBUSVoltage()}")
+        logger.info("BAT voltage: ${getBatVoltage()}")
+        logger.info("3v3 voltage: ${get3v3Voltage()}")
+        logger.info("VCC voltage: ${getVCCVoltage()}")
+        logger.info("Chrg voltage: ${getChrgVoltage()}")
+        logger.info("Full voltage: ${getFullVoltage()}")
     }
 
     private fun shouldSkipDevice(deviceNum: Int) = testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(deviceNum)
@@ -567,7 +574,7 @@ class MainPanelTestingSuite(
         if(portsCount == 0)
             return false
         sleep(serialBootTimeMS)
-        statusLogger.info("VBUS Voltage: " + adcProvider.getVBUSVoltage())
+        statusLogger.info("VBUS Voltage: " + getVBUSVoltage())
         var foundSerials = 0
         var ports: List<SerialPort>
         val endWait = System.currentTimeMillis() + 5000
@@ -756,23 +763,23 @@ class MainPanelTestingSuite(
                     if(fault1) "VBUS Power fault: over-current detected" else "Power OK", System.currentTimeMillis())
                 addResult(device, pwr1)
 
-                val vbus = actionTestVBUS_REF.action(adcProvider.getVBUSVoltage(), "", System.currentTimeMillis())
+                val vbus = actionTestVBUS_REF.action(getVBUSVoltage(), "", System.currentTimeMillis())
                 addResult(device, vbus)
 
-                val vcc = actionTestVBUS_VCC.action(adcProvider.getVCCVoltage(), "", System.currentTimeMillis())
+                val vcc = actionTestVBUS_VCC.action(getVCCVoltage(), "", System.currentTimeMillis())
                 addResult(device, vcc)
 
-                val v33 = actionTestVBUS_3v3.action(adcProvider.get3v3Voltage(), "", System.currentTimeMillis())
+                val v33 = actionTestVBUS_3v3.action(get3v3Voltage(), "", System.currentTimeMillis())
                 addResult(device, v33)
 
-                val bat = actionTestVBUS_Bat.action(adcProvider.getBatVoltage(), "", System.currentTimeMillis())
+                val bat = actionTestVBUS_Bat.action(getBatVoltage(), "", System.currentTimeMillis())
                 addResult(device, bat)
 
                 if (TEST_CHRG_DIODE_VOLTAGES) {
-                    val chrg = actionTestVBUS_CHRG.action(adcProvider.getChrgVoltage(), "", System.currentTimeMillis())
+                    val chrg = actionTestVBUS_CHRG.action(getChrgVoltage(), "", System.currentTimeMillis())
                     addResult(device, chrg)
 
-                    val full = actionTestVBUS_FULL.action(adcProvider.getFullVoltage(), "", System.currentTimeMillis())
+                    val full = actionTestVBUS_FULL.action(getFullVoltage(), "", System.currentTimeMillis())
                     addResult(device, full)
                 }
 
@@ -812,23 +819,23 @@ class MainPanelTestingSuite(
                     if(fault1) "BAT Power fault: over-current detected" else "Power OK", System.currentTimeMillis())
                 addResult(device, pwr1)
 
-                val bat = actionTestBAT_REF.action(adcProvider.getBatVoltage(), "", System.currentTimeMillis())
+                val bat = actionTestBAT_REF.action(getBatVoltage(), "", System.currentTimeMillis())
                 addResult(device, bat)
 
-                val vbus = actionTestBAT_VBUS.action(adcProvider.getVBUSVoltage(), "", System.currentTimeMillis())
+                val vbus = actionTestBAT_VBUS.action(getVBUSVoltage(), "", System.currentTimeMillis())
                 addResult(device, vbus)
 
-                val vcc = actionTestBAT_VCC.action(adcProvider.getVCCVoltage(), "", System.currentTimeMillis())
+                val vcc = actionTestBAT_VCC.action(getVCCVoltage(), "", System.currentTimeMillis())
                 addResult(device, vcc)
 
-                val v33 = actionTestBAT_3v3.action(adcProvider.get3v3Voltage(), "", System.currentTimeMillis())
+                val v33 = actionTestBAT_3v3.action(get3v3Voltage(), "", System.currentTimeMillis())
                 addResult(device, v33)
 
                 if (TEST_CHRG_DIODE_VOLTAGES) {
-                    val chrg = actionTestBAT_CHRG.action(adcProvider.getChrgVoltage(), "", System.currentTimeMillis())
+                    val chrg = actionTestBAT_CHRG.action(getChrgVoltage(), "", System.currentTimeMillis())
                     addResult(device, chrg)
 
-                    val full = actionTestBAT_FULL.action(adcProvider.getFullVoltage(), "", System.currentTimeMillis())
+                    val full = actionTestBAT_FULL.action(getFullVoltage(), "", System.currentTimeMillis())
                     addResult(device, full)
                 }
 

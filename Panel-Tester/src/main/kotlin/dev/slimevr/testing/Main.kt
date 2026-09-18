@@ -4,6 +4,7 @@ package dev.slimevr.testing
 
 import com.pi4j.Pi4J
 import com.pi4j.context.Context
+import com.pi4j.io.i2c.I2CConfigBuilder
 import com.pi4j.io.i2c.I2CProvider
 import dev.slimevr.database.RemoteTestingDatabase
 import dev.slimevr.hardware.Switchboard
@@ -14,6 +15,7 @@ import dev.slimevr.testing.stage2.Stage2TestingSuite
 import dev.slimevr.testing.stage3.Stage3Updater
 import dev.slimevr.testing.stage4.ExtensionsPanelTestingSuite
 import dev.slimevr.testing.stage5.ButterflyTrackerPanelTestingSuite
+import dev.slimevr.testing.stage5.CalibrateADC
 import dev.slimevr.ui.stage1.TesterUI
 import dev.slimevr.ui.stage2.Stage2UI
 import dev.slimevr.ui.stage3.Stage3UpdaterUI
@@ -42,16 +44,17 @@ fun main(args: Array<String>) {
     // Try adding program arguments via Run/Debug configuration.
     // Learn more about running applications: https://www.jetbrains.com/help/idea/running-applications.html.
     println("Program arguments: ${args.joinToString()}")
-    println("Test Rebuild 20")
 
     val globalLogger = Logger.getLogger("")
     val statusLogger = Logger.getLogger("status")
-    val database = RemoteTestingDatabase(
-        System.getenv("TESTER_RPC_URL"),
-        System.getenv("TESTER_RPC_PASSWORD"),
-        System.getenv("TESTER_NAME")?:"slime-tester-1",
-        System.getenv("TESTER_REPORT_TYPE")
-    )
+    val database: RemoteTestingDatabase by lazy {
+        RemoteTestingDatabase(
+            System.getenv("TESTER_RPC_URL"),
+            System.getenv("TESTER_RPC_PASSWORD"),
+            System.getenv("TESTER_NAME") ?: "slime-tester-1",
+            System.getenv("TESTER_REPORT_TYPE")
+        )
+    }
 
     val stage = System.getenv("TESTER_STAGE")?.toInt()
     if (stage == 2) {
@@ -85,7 +88,7 @@ fun main(args: Array<String>) {
         suite.start()
     } else if (stage == 5) {
         pi4j = Pi4J.newAutoContext()
-        val i2CProvider: I2CProvider = pi4j!!.provider("linuxfs-i2c")
+        val i2CProvider: I2CProvider = pi4j!!.provider("pigpio-i2c")
         val switchboard = SwitchboardStage5(pi4j!!)
         val adcProvider = ADCProvider(i2CProvider)
         val testerUi = TesterButterflyTrackerUI(globalLogger, statusLogger)
@@ -93,6 +96,14 @@ fun main(args: Array<String>) {
             ButterflyTrackerPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 20, globalLogger, statusLogger)
         suite.start()
         testerUi.registerTestingSuite(suite)
+    } else if(stage == 555) {
+        pi4j = Pi4J.newAutoContext()
+        val i2CProvider: I2CProvider = pi4j!!.provider("pigpio-i2c")
+        val adc = ADCProvider(i2CProvider)
+        val board = SwitchboardStage5(pi4j!!)
+        val cal = CalibrateADC(adc, board, LogManager.global)
+        cal.calibrate()
+        destroy()
     } else {
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("linuxfs-i2c")
