@@ -1,4 +1,4 @@
-package dev.slimevr.ui.butterfly.tracker
+package dev.slimevr.ui.stage5
 
 import com.googlecode.lanterna.TerminalSize
 import com.googlecode.lanterna.TextColor
@@ -10,9 +10,8 @@ import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
-import dev.slimevr.testing.PanelTestingSuite
-import dev.slimevr.testing.RotatablePanelTestingSuite
 import dev.slimevr.testing.TestStatus
+import dev.slimevr.testing.stage5.ButterflyTrackerPanelTestingSuite
 import dev.slimevr.testing.destroy
 import dev.slimevr.ui.LabelLogFormatter
 import dev.slimevr.ui.LabelLogHandler
@@ -116,7 +115,7 @@ class TesterButterflyTrackerUI(
         }.start()
     }
 
-    fun registerTestingSuite(suite: PanelTestingSuite) {
+    fun registerTestingSuite(suite: ButterflyTrackerPanelTestingSuite) {
         window.addWindowListener(object: WindowListenerAdapter() {
             override fun onInput(basePane: Window?, keyStroke: KeyStroke?, deliverEvent: AtomicBoolean?) {
                 if(!suite.isReady())
@@ -149,17 +148,6 @@ class TesterButterflyTrackerUI(
                     }
                     lch == 'j' -> {
                         suite.startTest(5, 6, 7, 8, 9)
-                    }
-                    lch == 't' -> {
-                        // Rotate panel and retest
-                        // For Extensions and butterfly dongle panels
-                        if(suite is RotatablePanelTestingSuite) {
-                            suite.transposeDevices()
-                            val failed = suite.getFailedDevices()
-                            if (failed.isNotEmpty()) {
-                                suite.startTest(*failed.toIntArray())
-                            }
-                        }
                     }
                     lch == '-' -> {
                         secondColumn = false

@@ -8,7 +8,7 @@ import dev.slimevr.hardware.usb.USBDmesgWatcher
 import dev.slimevr.hardware.usb.USBNotify
 import dev.slimevr.testing.*
 import dev.slimevr.testing.actions.*
-import dev.slimevr.ui.TesterUI
+import dev.slimevr.ui.stage1.TesterUI
 import java.io.FileReader
 import java.io.FileWriter
 import java.io.IOException
@@ -23,7 +23,7 @@ class MainPanelTestingSuite(
     private val devices: Int,
     private val logger: Logger,
     private var statusLogger: Logger
-) : Thread("Testing suit thread"), PanelTestingSuite, RotatablePanelTestingSuite, USBNotify {
+) : Thread("Testing suit thread"), USBNotify {
 
     private val powerBalanceTimeMS = 100L
     private val flashResetPinsMS = 200L
@@ -157,9 +157,9 @@ class MainPanelTestingSuite(
         }
     }
 
-    override fun isReady() = isReady
+    fun isReady() = isReady
 
-    override fun startTest(vararg devices: Int) {
+    fun startTest(vararg devices: Int) {
         synchronized(this) {
             if (isTesting)
                 return
@@ -169,7 +169,7 @@ class MainPanelTestingSuite(
         startTest = true
     }
 
-    override fun btnPressed() {
+    fun btnPressed() {
         btnPressed = true
     }
 
@@ -490,7 +490,7 @@ class MainPanelTestingSuite(
         }
     }
 
-    override fun getFailedDevices(): List<Int> {
+    fun getFailedDevices(): List<Int> {
         return deviceTests.filter { it.testStatus == TestStatus.ERROR }.map { it.deviceNum }
     }
 
@@ -517,7 +517,7 @@ class MainPanelTestingSuite(
         return false
     }
 
-    override fun transposeDevices() {
+    fun transposeDevices() {
         val tmp = mutableMapOf<Int, DeviceTest>()
         deviceTests.forEach {
             val newIndex = transposeDeviceIndex(it.deviceNum)

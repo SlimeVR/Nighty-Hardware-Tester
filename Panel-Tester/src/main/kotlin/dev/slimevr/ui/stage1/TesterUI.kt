@@ -1,4 +1,4 @@
-package dev.slimevr.ui
+package dev.slimevr.ui.stage1
 
 import com.googlecode.lanterna.TerminalSize
 import com.googlecode.lanterna.TextColor
@@ -10,11 +10,10 @@ import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import com.googlecode.lanterna.terminal.Terminal
 import dev.slimevr.logger.LogManager
-import dev.slimevr.testing.PanelTestingSuite
-import dev.slimevr.testing.RotatablePanelTestingSuite
-import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.TestStatus
 import dev.slimevr.testing.destroy
+import dev.slimevr.testing.stage1.MainPanelTestingSuite
+import dev.slimevr.ui.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
 
@@ -103,7 +102,7 @@ class TesterUI(
         }.start()
     }
 
-    fun registerTestingSuite(suite: PanelTestingSuite) {
+    fun registerTestingSuite(suite: MainPanelTestingSuite) {
         window.addWindowListener(object: WindowListenerAdapter() {
             override fun onInput(basePane: Window?, keyStroke: KeyStroke?, deliverEvent: AtomicBoolean?) {
                 if(!suite.isReady())
@@ -138,14 +137,12 @@ class TesterUI(
                         suite.startTest(5, 6, 7, 8, 9)
                     }
                     lch == 't' -> {
-                        // Rotate panel and retest
-                        // For Extensions and butterfly dongle panels
-                        if(suite is RotatablePanelTestingSuite) {
-                            suite.transposeDevices()
-                            val failed = suite.getFailedDevices()
-                            if (failed.isNotEmpty()) {
-                                suite.startTest(*failed.toIntArray())
-                            }
+                        // Legacy rotatable panel
+                        // Retest panel after physically rotated in the tester
+                        suite.transposeDevices()
+                        val failed = suite.getFailedDevices()
+                        if (failed.isNotEmpty()) {
+                            suite.startTest(*failed.toIntArray())
                         }
                     }
                     lch == '-' -> {

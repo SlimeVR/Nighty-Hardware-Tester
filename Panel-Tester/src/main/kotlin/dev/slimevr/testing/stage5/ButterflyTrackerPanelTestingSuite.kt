@@ -1,22 +1,27 @@
-package dev.slimevr.testing.butterfly.tracker
+package dev.slimevr.testing.stage5
 
 import dev.slimevr.database.TestingDatabase
-import dev.slimevr.hardware.Switchboard
+import dev.slimevr.hardware.SwitchboardStage5
+import dev.slimevr.hardware.SwitchboardStage5.Companion.PowerMode
+import dev.slimevr.hardware.SwitchboardStage5.Companion.ChannelMode
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.testing.*
-import dev.slimevr.ui.butterfly.tracker.TesterButterflyTrackerUI
+import dev.slimevr.ui.stage5.*
 import java.util.logging.Level
 import java.util.logging.Logger
 
+typealias PowerMode = dev.slimevr.hardware.SwitchboardStage5.Companion.PowerMode
+typealias ChannelMode = dev.slimevr.hardware.SwitchboardStage5.Companion.ChannelMode
+
 class ButterflyTrackerPanelTestingSuite(
-    private val switchboard: Switchboard,
+    private val switchboard: SwitchboardStage5,
     private val adcProvider: ADCProvider,
     private val testingDatabases: List<TestingDatabase>,
     private val testerUi: TesterButterflyTrackerUI,
     private val devices: Int,
     private val logger: Logger,
     private var statusLogger: Logger
-) : Thread("Testing suit thread"), PanelTestingSuite {
+) : Thread("Testing suit thread") {
 
     private val powerBalanceTimeMS = 100L
 
@@ -47,9 +52,9 @@ class ButterflyTrackerPanelTestingSuite(
         isReady = true
     }
 
-    override fun isReady() = isReady
+    fun isReady() = isReady
 
-    override fun startTest(vararg devices: Int) {
+    fun startTest(vararg devices: Int) {
         synchronized(this) {
             if (isTesting)
                 return
@@ -59,13 +64,13 @@ class ButterflyTrackerPanelTestingSuite(
         startTest = true
     }
 
-    override fun btnPressed() {
+    fun btnPressed() {
         btnPressed = true
     }
 
     private fun selfTest() {
         switchboard.disableAll()
-        switchboard.powerOff()
+        switchboard.power(PowerMode.OFF)
         sleep(powerBalanceTimeMS)
         logger.info("=== Testing suite self-test: ===")
         logger.info("VBUS voltage: ${adcProvider.getVBUSVoltage()}")
@@ -78,7 +83,7 @@ class ButterflyTrackerPanelTestingSuite(
 
     private fun shouldSkipDevice(deviceNum: Int) = testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(deviceNum)
 
-    override fun getFailedDevices(): List<Int> {
+    fun getFailedDevices(): List<Int> {
         return deviceTests.filter { it.testStatus == TestStatus.ERROR }.map { it.deviceNum }
     }
 

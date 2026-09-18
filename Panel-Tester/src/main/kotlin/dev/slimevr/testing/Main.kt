@@ -7,17 +7,18 @@ import com.pi4j.context.Context
 import com.pi4j.io.i2c.I2CProvider
 import dev.slimevr.database.RemoteTestingDatabase
 import dev.slimevr.hardware.Switchboard
+import dev.slimevr.hardware.SwitchboardStage5
 import dev.slimevr.logger.LogManager
-import dev.slimevr.testing.extensions.ExtensionsPanelTestingSuite
 import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.stage2.Stage2TestingSuite
 import dev.slimevr.testing.stage3.Stage3Updater
-import dev.slimevr.testing.butterfly.tracker.ButterflyTrackerPanelTestingSuite
-import dev.slimevr.ui.butterfly.tracker.TesterButterflyTrackerUI
-import dev.slimevr.ui.TesterUI
-import dev.slimevr.ui.extensions.ExtensionsUpdaterUI
+import dev.slimevr.testing.stage4.ExtensionsPanelTestingSuite
+import dev.slimevr.testing.stage5.ButterflyTrackerPanelTestingSuite
+import dev.slimevr.ui.stage1.TesterUI
 import dev.slimevr.ui.stage2.Stage2UI
-import dev.slimevr.ui.updater.Stage3UpdaterUI
+import dev.slimevr.ui.stage3.Stage3UpdaterUI
+import dev.slimevr.ui.stage4.ExtensionsUpdaterUI
+import dev.slimevr.ui.stage5.TesterButterflyTrackerUI
 import java.io.File
 import java.lang.Thread.sleep
 import java.util.logging.Level
@@ -85,7 +86,7 @@ fun main(args: Array<String>) {
     } else if (stage == 5) {
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("linuxfs-i2c")
-        val switchboard = Switchboard(pi4j!!)
+        val switchboard = SwitchboardStage5(pi4j!!)
         val adcProvider = ADCProvider(i2CProvider)
         val testerUi = TesterButterflyTrackerUI(globalLogger, statusLogger)
         val suite =

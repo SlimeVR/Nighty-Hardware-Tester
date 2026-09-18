@@ -1,4 +1,4 @@
-package dev.slimevr.ui.updater
+package dev.slimevr.ui.stage4
 
 import com.googlecode.lanterna.TerminalSize
 import com.googlecode.lanterna.TextColor
@@ -14,7 +14,7 @@ import dev.slimevr.testing.destroy
 import dev.slimevr.ui.*
 import java.util.logging.Logger
 
-class Stage3UpdaterUI (
+class ExtensionsUpdaterUI (
     globalLogger: Logger,
     deviceLoggers: Array<Logger?>
 ) {
@@ -52,7 +52,7 @@ class Stage3UpdaterUI (
             val logLabel = SlimyLabel("")
             logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
             val deviceLogHandler = LabelLogHandler(logLabel, 20)
-            deviceLogHandler.formatter = LabelLogFormatter()
+            deviceLogHandler.formatter = OnlyTextLogFormatter()
             deviceLoggers[i-1]?.addHandler(deviceLogHandler)
             deviceLoggers[i-1]?.useParentHandlers = false
             logLabel.setSize(TerminalSize(20, 20))
@@ -70,9 +70,9 @@ class Stage3UpdaterUI (
             testedDevicesUI.add(deviceUI)
         }
         val logLabel = SlimyLabel("")
-        logLabel.setSize(TerminalSize(20, 10))
+        logLabel.setSize(TerminalSize(20, 20))
         logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
-        fullLogHandler = LabelLogHandler(logLabel, 20)
+        fullLogHandler = LabelLogHandler(logLabel, 100)
         fullLogHandler.formatter = LabelLogFormatter()
         globalLogger.addHandler(fullLogHandler)
         mainPanel.addComponent(

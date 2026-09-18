@@ -1,4 +1,4 @@
-package dev.slimevr.testing.extensions
+package dev.slimevr.testing.stage4
 
 import dev.slimevr.database.TestingDatabase
 import dev.slimevr.hardware.usb.USBDmesgWatcher
@@ -11,7 +11,7 @@ import dev.slimevr.OperatingSystem
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.hardware.usb.USBSerialWatcher
 import dev.slimevr.testing.TestStatus
-import dev.slimevr.ui.extensions.ExtensionsUpdaterUI
+import dev.slimevr.ui.stage4.ExtensionsUpdaterUI
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 

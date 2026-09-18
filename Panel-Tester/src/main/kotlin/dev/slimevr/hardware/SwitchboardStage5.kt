@@ -9,28 +9,30 @@ import com.pi4j.io.gpio.digital.PullResistance
 class SwitchboardStage5(
     pi4j: Context
 ) {
+    companion object {
+        enum class PowerMode {
+            OFF,
+            USB,
+            BATTERY
+        }
 
-    enum class PowerMode {
-        OFF,
-        USB,
-        BATTERY
+        enum class ChannelMode {
+            OFF,
+            A,
+            B,
+            BOTH
+        }
+
+        var ON: Boolean = true
+        var OFF: Boolean = false
+        var ALL: Int = Int.MAX_VALUE
     }
-
-    enum class ChannelMode {
-        OFF,
-        A,
-        B,
-        BOTH
-    }
-
-    var ON: Boolean = true
-    var OFF: Boolean = false
-    var ALL: Int = Int.MAX_VALUE
 
     private var enablePullUp = true
     private var ledPullUp = false
     private var defaultOutputState = DigitalState.LOW
     private var defaultLedState = if (ledPullUp) DigitalState.LOW else DigitalState.HIGH
+    private var useResetPin = false
 
     private var enablePins = arrayOf(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(26).provider("pigpio-digital-output").build(),
@@ -47,7 +49,7 @@ class SwitchboardStage5(
 
     private var batteryEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(6).provider("pigpio-digital-output").build()
     private var vbusEnablePin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(5).provider("pigpio-digital-output").build()
-    //private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.LOW).initial(DigitalState.LOW).address(19).provider("pigpio-digital-output").build()
+    private var rstPin = DigitalOutput.newBuilder(pi4j).shutdown(defaultOutputState).initial(defaultOutputState).address(19).provider("pigpio-digital-output").build()
 
     private var ledPins = arrayOf(
         DigitalOutput.newBuilder(pi4j).shutdown(defaultLedState).initial(defaultLedState).address(18).provider("pigpio-digital-output").build(),
@@ -78,12 +80,13 @@ class SwitchboardStage5(
         disableAll()
     }
 
-    fun reset(enable: Boolean) {
-        /*if (mode) {
-            rstPin.high()
-        } else {
-            rstPin.low()
-        }*/
+    fun pinReset(enable: Boolean) {
+        // Resed by dedicated signal
+        rstPin.setState(enable)
+    }
+
+    fun resetSWD(deviceChannel : ChannelMode, deviceNum : Int) {
+        // TODO: Reset by SWD command
     }
 
     /**
@@ -93,22 +96,15 @@ class SwitchboardStage5(
      * - device(ALL, OFF)
      */
     fun device(deviceNum: Int, enable: Boolean) {
-        var d = if (enable) DigitalState.HIGH else DigitalState.LOW
         when(deviceNum) {
-            ALL -> {
-                enablePins.forEach {
-                    it.state(d)
-                }
-            }
-            else -> {
-                enablePins[deviceNum].state(d)
-            }
+            ALL -> enablePins.forEach { it.setState(enable) }
+            else -> enablePins[deviceNum].setState(enable)
         }
     }
 
     fun disableAll() {
         device(ALL, OFF)
-        reset(enable = false)
+        pinReset(OFF)
     }
 
     fun isPowerFault() = powerFaultPin.isLow

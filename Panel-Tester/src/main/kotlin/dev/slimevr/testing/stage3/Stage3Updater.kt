@@ -10,7 +10,7 @@ import dev.slimevr.testing.actions.ExecuteCommandAction
 import dev.slimevr.testing.actions.SerialMatchingAction
 import dev.slimevr.testing.actions.SuccessAction
 import dev.slimevr.ui.stage2.Stage2UI
-import dev.slimevr.ui.updater.Stage3UpdaterUI
+import dev.slimevr.ui.stage3.Stage3UpdaterUI
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
