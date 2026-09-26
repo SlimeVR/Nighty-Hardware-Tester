@@ -7,6 +7,8 @@ import java.io.IOException
 import java.lang.StringBuilder
 import java.util.logging.Level
 import java.util.logging.Logger
+import java.util.regex.Matcher
+import java.util.regex.Pattern
 
 /**
  * Executes console command and tests output for patterns.
@@ -24,8 +26,18 @@ class ExecuteCommandAction(
     private val logger: Logger? = null
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
 
+    private val argRegex = Pattern.compile("\"([^\"]*)\"|'([^']*)'|(\\S+)")
+
+    private fun splitArgs(command: String): List<String> {
+        var args = mutableListOf<String>()
+        val m: Matcher = argRegex.matcher(command)
+        while (m.find())
+            args.add(m.group(1) ?: m.group(2) ?: m.group(3))
+        return args
+    }
+
     private val processBuilder: ProcessBuilder =
-        ProcessBuilder(command.split(" ")).redirectErrorStream(true).redirectOutput(
+        ProcessBuilder(splitArgs(command)).redirectErrorStream(true).redirectOutput(
             ProcessBuilder.Redirect.PIPE
         ).directory(directory ?: File("").absoluteFile)
 
@@ -35,10 +47,12 @@ class ExecuteCommandAction(
             fullLog.add(log)
         var logStart = fullLog.size
         logger?.info("Starting process: " + processBuilder.command().joinToString(" "))
+        fullLog.add(processBuilder.command().map{s -> if (s.contains(" ")) "'$s'" else s}.joinToString(" "))
         val process = try {
             processBuilder.start()
         } catch(ex: Exception) {
             logger?.log(Level.SEVERE, "Can't start process", ex)
+            ex.message?.let { fullLog.add(it) }
             return TestResult(
                 testName,
                 TestStatus.ERROR,

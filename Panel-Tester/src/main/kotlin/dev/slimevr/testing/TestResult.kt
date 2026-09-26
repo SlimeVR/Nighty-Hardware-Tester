@@ -11,4 +11,8 @@ data class TestResult(
     override fun toString(): String {
         return "$testName: $endValue (${status.name})"
     }
+
+    fun matchLog(pattern: String): List<String>? {
+        return pattern.toRegex().find(log)?.groupValues
+    }
 }

@@ -58,6 +58,14 @@ differs for different devices, check datasheet or readme.md
 |     6       |   3300    |    475    |           |
 |     7       |   3300    |    860    |  fastest  |
 */
+const val ADS1X15_DR_8SPS = 0x0000u // Slowest
+const val ADS1X15_DR_16SPS = 0x0020u
+const val ADS1X15_DR_32SPS = 0x0040u
+const val ADS1X15_DR_64SPS = 0x0060u
+const val ADS1X15_DR_128SPS = 0x0080u // Default
+const val ADS1X15_DR_250SPS = 0x00A0u
+const val ADS1X15_DR_475SPS = 0x00C0u
+const val ADS1X15_DR_860SPS = 0x00E0u // Fastest
 
 //  BIT 4 comparator modi                    // 1 << 4
 const val ADS1X15_COMP_MODE_TRADITIONAL = 0x0000u
@@ -110,15 +118,18 @@ const val ADS1115_ADDRESS_VCC = 0x49u
 const val ADS1115_ADDRESS_SDA = 0x4Au
 const val ADS1115_ADDRESS_SCL = 0x4Bu
 
+const val ADS1X15_PGA_DEFAULT = ADS1X15_PGA_6_144V
+const val ADS1X15_DR_DEFAULT = ADS1X15_DR_128SPS
+
 class ADS1X15(
     device: I2C) {
 
     private var _config: UInt = ADS_CONF_COMP or ADS_CONF_GAIN or ADS_CONF_RES_16 or ADS_CONF_CHAN_4
     private var _conversionDelay: UInt = ADS1115_CONVERSION_DELAY
     private var _bitShift: UInt = 0u
-    private var _gain: UInt = 0u
-    private var _mode: UInt = 0u
-    private var _datarate: UInt = 0u
+    private var _gain: UInt = ADS1X15_PGA_DEFAULT
+    private var _mode: UInt = ADS1X15_MODE_SINGLE
+    private var _datarate: UInt = ADS1X15_DR_DEFAULT
 
     //  COMPARATOR variables
     private var _compMode: UInt = 0u
@@ -132,11 +143,12 @@ class ADS1X15(
     private val registerHighTreshold: I2CRegister = device.getRegister(ADS1X15_REG_HIGH_THRESHOLD.toInt())
 
     init {
-        _gain = ADS1X15_PGA_6_144V
+        _gain = ADS1X15_PGA_DEFAULT
         _mode = ADS1X15_MODE_SINGLE
-        //_datarate = 7u shl 5 // High speed 860 SPS
-        _datarate = (4u shl 5) // Default 128 SPS
-        //_datarate = 0u // Slow 8 SPS
+        //_datarate = ADS1X15_DR_860SPS // High speed
+        //_datarate = ADS1X15_DR_250SPS
+        _datarate = ADS1X15_DR_128SPS // Default
+        //_datarate = ADS1X15_DR_8SPS // Slowest
     }
 
     private fun _requestADC(readmode: UInt)
@@ -223,6 +235,41 @@ class ADS1X15(
             ADS1X15_PGA_0_256V -> 0.256f
             else -> ADS1X15_INVALID_VOLTAGE.toFloat()
         }
+    }
+
+    fun setPGA(gain: UInt = ADS1X15_PGA_DEFAULT) {
+        assert(
+            gain in listOf(
+                ADS1X15_PGA_6_144V,
+                ADS1X15_PGA_4_096V,
+                ADS1X15_PGA_2_048V,
+                ADS1X15_PGA_1_024V,
+                ADS1X15_PGA_0_512V,
+                ADS1X15_PGA_0_256V
+            )
+        )
+        _gain = gain
+    }
+
+    fun setDatarate(rate: UInt = ADS1X15_DR_DEFAULT) {
+        assert(
+            rate in listOf(
+                ADS1X15_DR_8SPS,
+                ADS1X15_DR_16SPS,
+                ADS1X15_DR_32SPS,
+                ADS1X15_DR_64SPS,
+                ADS1X15_DR_128SPS,
+                ADS1X15_DR_250SPS,
+                ADS1X15_DR_475SPS,
+                ADS1X15_DR_860SPS
+            )
+        )
+        _datarate = rate
+    }
+
+    fun setDefault() {
+        setPGA(ADS1X15_PGA_6_144V)
+        setDatarate(ADS1X15_DR_128SPS)
     }
 
     fun isBusy(): Boolean = !isReady()

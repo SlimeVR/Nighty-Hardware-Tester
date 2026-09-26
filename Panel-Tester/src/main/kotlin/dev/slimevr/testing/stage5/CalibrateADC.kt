@@ -40,6 +40,8 @@ class CalibrateADC(
     /** VDD targer test-point */
     private fun getOutVoltage(): Float = adc.ADS1X15_1.getVoltage(3u)
 
+    private val powerBalanceTimeMS = 50L
+
     fun calibrate() {
         println("=== Measure Iout reference voltages ===")
         board.power(PowerMode.BATTERY)
@@ -48,14 +50,16 @@ class CalibrateADC(
             board.channel(ch)
             for (idx in 0 until 10) {
                 board.device(idx, ON)
-                Thread.sleep(1)
+                Thread.sleep(2)
                 val bat1 = measureBat()
-                if (bat1 > 3.5f) {
+                val cur1 = measure()
+                if (bat1 > 3.5f || cur1 < 1e-3) {
                     print("${ch}${idx + 1} = NO DRAW, ")
                 } else {
-                    val bat9 = measureBat(4)
-                    val cur = measure(5)
-                    val bat = (bat1 + bat9 * 4f) / 5f
+                    val bat9 = measureBat(19)
+                    val cur9 = measure(19)
+                    val bat = (bat1 + bat9 * 19f) / 20f
+                    val cur = (cur1 + cur9 * 19f) / 20f
                     print("${ch}${idx + 1} = $cur @ $bat, ")
                 }
                 board.device(idx, OFF)
@@ -70,8 +74,8 @@ class CalibrateADC(
             board.channel(ch)
             for (idx in 0 until 10) {
                 board.device(idx, ON)
-                Thread.sleep(1)
-                val offset = measure(5)
+                Thread.sleep(2)
+                val offset = measure(20)
                 print("${ch}${idx + 1} = $offset, ")
                 board.device(idx, OFF)
             }

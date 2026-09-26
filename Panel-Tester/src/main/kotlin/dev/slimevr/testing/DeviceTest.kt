@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets
 import java.util.logging.Logger
 
 
-class DeviceTest(
+open class DeviceTest(
     /**
      * Device index in a panel (0-based).
      */

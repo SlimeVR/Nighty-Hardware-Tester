@@ -5,11 +5,17 @@ import java.io.StringWriter
 import java.text.MessageFormat
 import java.text.SimpleDateFormat
 import java.util.logging.Formatter
+import java.util.logging.Level
 import java.util.logging.LogRecord
 
 class OnlyTextLogFormatter : Formatter() {
     override fun format(record: LogRecord): String {
         val sb = StringBuilder()
+        when (record.level) {
+            Level.SEVERE -> sb.append(SlimyLabel.COLOR_ERROR_PREFIX)
+            Level.WARNING -> sb.append(SlimyLabel.COLOR_WARNING_PREFIX)
+            else -> {}
+        }
         sb.append(record.message)
         val localThrowable = record.thrown
         if (localThrowable != null) {

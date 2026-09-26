@@ -9,11 +9,11 @@ class VoltageTestAction(
     val maxValue: Float
 ): TestAction<Float> {
 
+    fun fail(value: Float) : Boolean = (value < minValue || value > maxValue)
+    fun pass(value: Float): Boolean = !fail(value)
+
     override fun action(testedValue: Float, log: String, startTime: Long): TestResult {
-        if(testedValue < minValue || testedValue > maxValue) {
-            return TestResult(testName, TestStatus.ERROR, startTime, System.currentTimeMillis(), testedValue.toString(), log)
-        } else {
-            return TestResult(testName, TestStatus.PASS, startTime, System.currentTimeMillis(), testedValue.toString(), log)
-        }
+        val status = if (fail(testedValue)) TestStatus.ERROR else TestStatus.PASS
+        return TestResult(testName, status, startTime, System.currentTimeMillis(), testedValue.toString(), log)
     }
 }

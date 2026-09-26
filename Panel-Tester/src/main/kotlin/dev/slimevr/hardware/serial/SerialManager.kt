@@ -3,19 +3,24 @@ package dev.slimevr.hardware.serial
 import com.fazecast.jSerialComm.SerialPort
 import com.fazecast.jSerialComm.SerialPortMessageListener
 
-class SerialManager {
+class SerialManager(
+    private val portChecker: SerialPortChecker = ESPPortChecker(),
+    private val sendReset: Boolean = true
+    ) {
 
     private val knownPorts = mutableListOf<SerialPort>()
 
     @Synchronized
     fun findNewPorts(): List<SerialPort> {
-        return SerialPort.getCommPorts().filter { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } == 0) and isValidPort(it) }
+        return SerialPort.getCommPorts().filter { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } == 0) and portChecker.isValidPort(it) }
     }
 
     fun openPort(port: SerialPort, listener: SerialPortMessageListener): Boolean {
         port.setBaudRate(115200)
-        port.clearRTS()
-        port.clearDTR()
+        if(sendReset) {
+            port.clearRTS()
+            port.clearDTR()
+        }
         if(port.openPort(0)) {
             port.addDataListener(listener)
             return true
@@ -26,6 +31,8 @@ class SerialManager {
     fun markAsKnown(port: SerialPort) {
         knownPorts.add(port)
     }
+
+    fun getKnownPorts() = knownPorts
 
     @Synchronized
     fun areKnownPortsConnected(): Boolean {
@@ -52,15 +59,5 @@ class SerialManager {
     fun closeAllPorts() {
         knownPorts.forEach { closePort(it) }
         knownPorts.clear()
-    }
-
-    private fun isValidPort(port: SerialPort): Boolean {
-        if(!port.systemPortPath.startsWith("/dev/ttyUSB") && !port.systemPortPath.startsWith("\\\\.\\COM"))
-            return false
-        arrayOf("ch340", "cp21", "ch910", "usb", "seri").forEach {
-            if(port.descriptivePortName.lowercase().contains(it) && !port.descriptivePortName.lowercase().contains("bluetooth"))
-                return true
-        }
-        return false
     }
 }

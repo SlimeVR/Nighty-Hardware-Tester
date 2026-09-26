@@ -34,6 +34,17 @@ import java.util.logging.Level
  * @author Martin
  */
 class SlimyLabel : AbstractComponent<SlimyLabel> {
+
+    companion object {
+        const val ESCAPE_PREFIX = '\u001B'
+        const val ESCAPE_PREFIX_SIZE = 3
+        const val COLOR_ERROR_PREFIX = "\u001BE,"
+        const val COLOR_WARNING_PREFIX = "\u001BW,"
+        const val COLOR_INFO_PREFIX = "\u001BI,"
+        const val COLOR_CONFIG_PREFIX = "\u001BC,"
+        const val COLOR_FINE_PREFIX = "\u001BF,"
+    }
+
     private var cachedLines = mutableListOf<String>()
 
     /**
@@ -190,7 +201,20 @@ class SlimyLabel : AbstractComponent<SlimyLabel> {
                 val lines = graphics.size.rows.coerceAtMost(cachedLines.size)
                 val start = if (scrollToBottom) 0.coerceAtLeast(cachedLines.size - lines) else 0
                 for (row in start until start + lines) {
-                    val line = cachedLines[row]
+                    var line = cachedLines[row]
+                    if(line.startsWith(ESCAPE_PREFIX)) {
+                        graphics.setForegroundColor( when(line.substring(0, ESCAPE_PREFIX_SIZE)) {
+                            COLOR_ERROR_PREFIX -> TextColor.ANSI.RED
+                            COLOR_WARNING_PREFIX -> TextColor.ANSI.YELLOW
+                            COLOR_INFO_PREFIX -> TextColor.ANSI.CYAN
+                            COLOR_CONFIG_PREFIX -> TextColor.ANSI.GREEN
+                            COLOR_FINE_PREFIX -> TextColor.ANSI.BLACK_BRIGHT
+                            else -> foregroundColor
+                        })
+                        line = line.substring(ESCAPE_PREFIX_SIZE)
+                    } else {
+                        //graphics.setForegroundColor(foregroundColor)
+                    }
                     val fitString = TerminalTextUtils.fitString(line, availableColumns)
                     graphics.putString(0, row - start, fitString)
                 }

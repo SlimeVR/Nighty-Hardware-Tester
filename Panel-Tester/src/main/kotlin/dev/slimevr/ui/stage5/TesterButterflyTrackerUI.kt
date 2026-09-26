@@ -30,7 +30,7 @@ class TesterButterflyTrackerUI(
     val statusLogHandler: LabelLogHandler
     val testedDevicesUI = mutableListOf<TestingDeviceUI>()
     val window = BasicWindow()
-    val secondRowLabel = Label("Controlling: FIRST column")
+    val secondRowLabel = Label("Controlling: LEFT side")
     var secondColumn = false
 
     init {
@@ -82,7 +82,7 @@ class TesterButterflyTrackerUI(
         }
 
         val logLabel = SlimyLabel("")
-        logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
+        //logLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
         fullLogHandler = LabelLogHandler(logLabel, 100)
         fullLogHandler.formatter = LabelLogFormatter()
         globalLogger.addHandler(fullLogHandler)
@@ -94,7 +94,7 @@ class TesterButterflyTrackerUI(
         )
 
         val statusLabel = SlimyLabel("")
-        statusLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
+        //statusLabel.setForegroundColor(TextColor.ANSI.GREEN_BRIGHT)
         statusLogHandler = LabelLogHandler(statusLabel, 100)
         statusLogHandler.formatter = OnlyTextLogFormatter()
         statusLogger.addHandler(statusLogHandler)
@@ -125,7 +125,6 @@ class TesterButterflyTrackerUI(
                 when {
                     ch == null -> {}
                     ch == ' ' -> {
-                        suite.btnPressed()
                         suite.startTest()
                     }
                     ch.isDigit() -> {
@@ -151,17 +150,21 @@ class TesterButterflyTrackerUI(
                     }
                     lch == '-' -> {
                         secondColumn = false
-                        secondRowLabel.text = "Controlling: FIRST column"
+                        secondRowLabel.text = "Controlling: LEFT side"
                     }
-                    lch == '+' -> {
+                    lch == '+' || lch == '=' -> {
                         secondColumn = true
-                        secondRowLabel.text = "Controlling: SECOND column"
+                        secondRowLabel.text = "Controlling: RIGHT side"
                     }
                     lch == 'g' -> {
                         suite.startTest(10, 11, 12, 13, 14)
                     }
                     lch == 'b' -> {
                         suite.startTest(15, 16, 17, 18, 19)
+                    }
+                    lch == 'e' -> {
+                        suite.eraseFlash = true
+                        suite.startTest()
                     }
                 }
             }

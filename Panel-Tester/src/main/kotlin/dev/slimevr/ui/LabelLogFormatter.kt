@@ -14,6 +14,13 @@ class LabelLogFormatter : Formatter() {
     override fun format(record: LogRecord): String {
         val sb = StringBuilder()
         val localLevel = record.level
+        when (localLevel) {
+            Level.SEVERE -> sb.append(SlimyLabel.COLOR_ERROR_PREFIX)
+            Level.WARNING -> sb.append(SlimyLabel.COLOR_WARNING_PREFIX)
+            Level.INFO -> sb.append(SlimyLabel.COLOR_INFO_PREFIX)
+            Level.CONFIG -> sb.append(SlimyLabel.COLOR_CONFIG_PREFIX)
+            else -> sb.append(SlimyLabel.COLOR_FINE_PREFIX)
+        }
         sb.append(dateFormat.format(record.millis))
         sb.append(" [").append(localLevel.localizedName).append("] ")
         sb.append(record.message)
