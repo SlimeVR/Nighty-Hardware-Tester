@@ -49,6 +49,7 @@ class ButterflyTrackerPanelTestingSuite(
     private val serialEnumTimeMS = 2000L
     private val serialOpenTimeMS = 100L
     private val SERIAL_RETRIES = 3
+    private val PING_RETRIES = 5
 
     private val actionPowerGood = SuccessAction("Power good")
     //private val actionVBusRef = VoltageTestAction("VBUS reference", 4.8f, 5.5f) // 5V
@@ -87,9 +88,7 @@ class ButterflyTrackerPanelTestingSuite(
     private var isTesting = false
     private val committedSuccessfulDeviceIds = mutableListOf<String>()
     private var startTest: Boolean = false
-    private var btnPressed: Boolean = false
     private var testOnlyDevices = setOf<Int>()
-    private val usbMap = mutableMapOf<String, Int>()
     private var isReady = false
     private var testRepeat = false
 
@@ -157,6 +156,15 @@ class ButterflyTrackerPanelTestingSuite(
 
     fun isReady() = isReady
 
+    private fun waitTestStart() {
+        switchboard.disableAll()
+        statusLogger.info("=== Ready ===")
+        while (!switchboard.isButtonPressed() && !startTest) {
+            sleep(10)
+        }
+        startTest = false
+    }
+
     fun startTest(vararg devices: Int) {
         synchronized(this) {
             if (isTesting)
@@ -167,8 +175,16 @@ class ButterflyTrackerPanelTestingSuite(
         startTest = true
     }
 
-    fun btnPressed() {
-        btnPressed = true
+    private fun testEnd() {
+        switchboard.disableAll()
+        serialManager.removePort(dongle.serialPort!!)
+        serialManager.closeAllPorts()
+        testOnlyDevices = setOf()
+        startTest = false
+        eraseFlash = false
+        val testEnd = System.currentTimeMillis()
+        statusLogger.info("Done in ${(testEnd - testStart) / 1000}s")
+        sleep(300)
     }
 
     /**
@@ -289,7 +305,7 @@ class ButterflyTrackerPanelTestingSuite(
                 throw UnexpectedException("USB communication with Dongle failed")
             } else {
                 // Wait for the command output and disconnect
-                val getInfoResult = SerialMatchingAction("Read address", infoResultSuccess, infoResultFail, dongle, 200)
+                val getInfoResult = SerialMatchingAction("Read address", infoResultSuccess, infoResultFail, dongle, 500)
                 // Address and channel lookup
                 with(getInfoResult.action("", "", startTime)) {
                     serialManager.closePort(dongle.serialPort!!)
@@ -335,15 +351,6 @@ class ButterflyTrackerPanelTestingSuite(
         }
         switchboard.channel(ChannelMode.OFF)
         return -1
-    }
-
-    private fun waitTestStart() {
-        switchboard.disableAll()
-        statusLogger.info("=== Ready ===")
-        while (!switchboard.isButtonPressed() && !startTest) {
-            sleep(10)
-        }
-        startTest = false
     }
 
     private fun testStart() {
@@ -580,6 +587,7 @@ class ButterflyTrackerPanelTestingSuite(
             testDevices(i)
             clearSerial()
         }
+        // Cycle the power to properly handle device change on usb ports
         switchboard.disableAll()
         sleep(powerBalanceTimeMS)
         switchboard.power(PowerMode.USB)
@@ -590,6 +598,11 @@ class ButterflyTrackerPanelTestingSuite(
             testDevices(i)
             clearSerial()
         }
+
+        // TODO: Ping devices from the dongle?
+
+        // TODO: Measure current draw in sleep
+
         switchboard.disableAll()
     }
 
@@ -610,6 +623,7 @@ class ButterflyTrackerPanelTestingSuite(
         return deviceTests[deviceNum]
     }
 
+    // Dmesg callback
     override fun setUSB(addr: String, tty: String) {
         val device = devicePortLookup(addr, switchboard.channel()) ?: return
         ui.setUSB(device.deviceNum, tty)
@@ -744,7 +758,11 @@ class ButterflyTrackerPanelTestingSuite(
                         return
                     }
                 }
+                serialManager.closePort(port)
             } else {
+                // Failed to send command means either device is disconnected
+                // or native exception (example SerialPortTimeoutException) that
+                // means port is not operable and we need to reopen it again
                 if(retry < SERIAL_RETRIES) {
                     logger.warning("[${device.deviceNum + 1}/$devices] Can't send serial command. Retry...$retry")
                     device.testStatus = TestStatus.TESTING
@@ -769,11 +787,10 @@ class ButterflyTrackerPanelTestingSuite(
     }
 
     fun getDeviceInfo(device: DeviceTest, retry: Int) {
-        val startTime = System.currentTimeMillis()
         statusLogger.info("[${device.deviceNum + 1}] Testing...")
         // Wait for the command output and disconnect
-        val getInfoResult =
-            SerialMatchingAction("Read device info", infoResultSuccess, infoResultFail, device, 2000)
+        val getInfoResult = SerialMatchingAction("Read device info", infoResultSuccess, infoResultFail, device, 2000)
+        val startTime = System.currentTimeMillis()
         val infoResult = getInfoResult.action("", "", startTime)
         addResult(device, infoResult)
         if (infoResult.status == TestStatus.PASS) {
@@ -797,31 +814,23 @@ class ButterflyTrackerPanelTestingSuite(
             val imuResult = actionGetIMU.action(imuOk, imuMatch?.get(0) ?: "IMU not found", startTime)
             addResult(device, imuResult)
 
-            // TODO Test IMU ?
+            // TODO Request IMU self-test?
+            // Note: IMU detection by SoC is enough for general testing
 
-            // TODO Test Mag ?
+            // TODO: Test Mag is detected
+            // Should be provided by INFO response
 
-            // TODO test Radio
+            // TODO Request Mag self-test?
+            // Note: Mag detection by SoC is enough for general testing
+
             // Ping the dongle
-            val radioChannel = dongle.channel - 2400
-            if (device.sendSerialCommand("ping ${dongle.deviceId} $radioChannel")) {
-                getPong(device, retry)
-            } else {
-                if(retry < SERIAL_RETRIES) {
-                    logger.warning("[${device.deviceNum + 1}/$devices] Can't send serial command. Retry...$retry")
-                    device.testStatus = TestStatus.TESTING
-                    showStatus(device, TestStatus.PORT_ERROR)
-                    return
-                }
-                val result = failSendPingCommand.action("Serial command error", startTime)
-                addResult(device, result)
-            }
+            checkDonglePing(device, retry)
         } else {
             if(retry < SERIAL_RETRIES) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Serial response failed. Retry...$retry")
                 device.testStatus = TestStatus.TESTING
                 showStatus(device, TestStatus.PORT_ERROR)
-                return
+                return // to external retry loop
             }
         }
     }
@@ -830,18 +839,57 @@ class ButterflyTrackerPanelTestingSuite(
     private val pongResultFail = arrayOf("Unknown command".toRegex())
     private val PONG_RSSI_MIN = 50
 
-    private fun getPong(device: DeviceTest) {
-        val startTime = System.currentTimeMillis()
-        val waitPongResult =
-            SerialMatchingAction("Read pong info", pongResultSuccess, pongResultFail, device, 1000)
-        val pongResult = waitPongResult.action("", "", startTime)
-        addResult(device, pongResult)
-        val match = pongResult.matchLog("PONG packet received from ([a-zA-Z0-9:]+), RSSI ([0-9]+)")
-        val pongAddress = match?.get(1) ?: ""
-        val pongRssi = match?.get(2)?.toInt() ?: -1
-        val pongOk = pongAddress.contentEquals(device.deviceId) && (pongRssi < PONG_RSSI_MIN)
-        val result = actionRadioPong.action(pongOk, match?.get(0) ?: "No pong packet", startTime)
-        addResult(device, result)
+    private fun checkDonglePing(device: DeviceTest, retry: Int) {
+        val radioChannel = dongle.channel - 2400
+        retryPing@ for(i in 1..PING_RETRIES) {
+            val startTime = System.currentTimeMillis()
+            if (device.sendSerialCommand("ping ${dongle.deviceId} $radioChannel")) {
+                val waitPongResult = SerialMatchingAction("Read pong info", pongResultSuccess, pongResultFail, device, 500)
+                val pongResult = waitPongResult.action("", "", startTime)
+                if(device.serialDisconnected) {
+                    return // to external retry loop
+                }
+                if(pongResult.endValue.lowercase().startsWith("timeout")) {
+                    // Dongle can miss ping packet, so it is OK to retry again
+                    if(i < PING_RETRIES) {
+                        //logger.warning("[${device.deviceNum + 1}/$devices] No pong response. Retry...$i")
+                        continue@retryPing
+                    }
+                }
+                val match = pongResult.matchLog("PONG packet received from ([a-zA-Z0-9:]+), RSSI ([0-9]+)")
+                val pongAddress = match?.get(1) ?: ""
+                val pongRssi = match?.get(2)?.toInt() ?: 255
+                val pongOk = pongAddress.contentEquals(device.deviceId) && (pongRssi < PONG_RSSI_MIN)
+                val result = actionRadioPong.action(pongOk, match?.get(0) ?: "No pong packet", startTime)
+                // Address mismatch may be due to requests collision
+                // Low RSSI may be due to radio interference
+                // Both is OK, just retry again
+                if(result.status == TestStatus.ERROR) {
+                    if(i < PING_RETRIES) {
+                        //logger.warning("[${device.deviceNum + 1}/$devices] Failed pong response. Retry...$i")
+                        continue@retryPing
+                    }
+                }
+                // Record success or the latest error
+                addResult(device, pongResult)
+                addResult(device, result)
+            } else {
+                // Failed to send command means either device is disconnected
+                // or native exception (example SerialPortTimeoutException) that
+                // means port is not operable and we need to reopen it again
+                if(device.serialDisconnected) {
+                    return // to external retry loop
+                }
+                if(retry < SERIAL_RETRIES) {
+                    logger.warning("[${device.deviceNum + 1}/$devices] Can't send serial command. Retry...$retry")
+                    device.testStatus = TestStatus.TESTING
+                    showStatus(device, TestStatus.PORT_ERROR)
+                    return // to external retry loop
+                }
+                val result = failSendPingCommand.action("Serial command error", startTime)
+                addResult(device, result)
+            }
+        }
     }
 
     private fun clearSerial() {
@@ -908,18 +956,6 @@ class ButterflyTrackerPanelTestingSuite(
             }
         }
     }*/
-
-    private fun testEnd() {
-        switchboard.disableAll()
-        serialManager.removePort(dongle.serialPort!!)
-        serialManager.closeAllPorts()
-        testOnlyDevices = setOf()
-        startTest = false
-        eraseFlash = false
-        val testEnd = System.currentTimeMillis()
-        statusLogger.info("Done in ${(testEnd - testStart) / 1000}s")
-        sleep(300)
-    }
 
     private fun shouldSkipDevice(deviceNum: Int) = testOnlyDevices.isNotEmpty() && !testOnlyDevices.contains(deviceNum)
 
