@@ -44,6 +44,7 @@ class RemoteTestingDatabase(
         testType,
         toTestValues(device),
         testerName,
+        if (device.testStatus == TestStatus.PASS) "succeeded" else "failed",
         dateFormat.format(Date(device.startTime)),
         dateFormat.format(Date(device.endTime))
     )
@@ -70,6 +71,7 @@ class RemoteTestingDatabase(
         val type: String,
         val values: List<TestReportValue>,
         val tester: String,
+        val state: String,
         val startedAt: String,
         val endedAt: String
     )
