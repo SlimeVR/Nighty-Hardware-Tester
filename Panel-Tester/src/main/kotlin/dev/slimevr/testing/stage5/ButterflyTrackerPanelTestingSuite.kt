@@ -2,15 +2,17 @@ package dev.slimevr.testing.stage5
 
 import com.fazecast.jSerialComm.SerialPort
 import dev.slimevr.database.TestingDatabase
+import dev.slimevr.database.TestedDevicesLocalCache
 import dev.slimevr.hardware.SwitchboardStage5
 import dev.slimevr.hardware.SwitchboardStage5.Companion.PowerMode
 import dev.slimevr.hardware.SwitchboardStage5.Companion.ChannelMode
 import dev.slimevr.hardware.SwitchboardStage5.Companion.LedColor
-import dev.slimevr.hardware.serial.ButterflyTrackerPortChecker
+import dev.slimevr.hardware.serial.ButterflyTrackerPortFilter
 import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.hardware.swd.ProgrammerService
 import dev.slimevr.hardware.usb.USBDmesgWatcher
 import dev.slimevr.hardware.usb.USBNotify
+import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.*
 import dev.slimevr.testing.actions.ExecuteCommandAction
 import dev.slimevr.testing.actions.FailedAction
@@ -22,8 +24,6 @@ import dev.slimevr.ui.stage5.*
 import java.rmi.UnexpectedException
 import java.util.logging.Level
 import java.util.logging.Logger
-import java.io.File
-import java.nio.file.Path
 
 typealias PowerMode = dev.slimevr.hardware.SwitchboardStage5.Companion.PowerMode
 typealias ChannelMode = dev.slimevr.hardware.SwitchboardStage5.Companion.ChannelMode
@@ -31,7 +31,7 @@ typealias ChannelMode = dev.slimevr.hardware.SwitchboardStage5.Companion.Channel
 class ButterflyTrackerPanelTestingSuite(
     private val switchboard: SwitchboardStage5,
     private val adc: ADCProvider,
-    private val testingDatabases: List<TestingDatabase>,
+    private val dbs: List<TestingDatabase>,
     private val ui: TesterButterflyTrackerUI,
     private val devices: Int,
     private val logger: Logger,
@@ -47,9 +47,13 @@ class ButterflyTrackerPanelTestingSuite(
 
     private val powerBalanceTimeMS = 100L
     private val serialEnumTimeMS = 2000L
-    private val serialOpenTimeMS = 100L
+    private val serialOpenTimeMS = 200L
     private val SERIAL_RETRIES = 3
     private val PING_RETRIES = 5
+
+    private val FLASH_DEVICES = true
+    private val SUBMIT_RESULTS = true
+    private val RETEST_RETRY = true
 
     private val actionPowerGood = SuccessAction("Power good")
     //private val actionVBusRef = VoltageTestAction("VBUS reference", 4.8f, 5.5f) // 5V
@@ -70,11 +74,11 @@ class ButterflyTrackerPanelTestingSuite(
     private val actionRadioPong = SuccessAction("Test Radio")
 
     private val firmwareFile = System.getenv("TESTER_FIRMWARE_FILE")
-    private val FIRMWARE_HASH = "e7484d4f9ec5" // TODO
+    private val FIRMWARE_HASH = System.getenv("TESTER_FIRMWARE_COMMIT") // Git hash
     private val emptyFile = "blank.hex"
-    var eraseFlash = false
+    private val EMPTY_ID_PREFIX = "00000000:"
 
-    private val serialManager = SerialManager(ButterflyTrackerPortChecker(), sendReset = false)
+    private val serialManager = SerialManager(ButterflyTrackerPortFilter(), sendReset = false)
     private val dmesgWatcher = USBDmesgWatcher(this)
 
     private var dongle = DongleDeviceTest()
@@ -84,11 +88,13 @@ class ButterflyTrackerPanelTestingSuite(
     private var probeSerials = mutableListOf("unknown", "unknown")
 
     private val deviceTests = mutableListOf<DeviceTest>()
+    private val committedList = TestedDevicesLocalCache("testedList.txt", logger, statusLogger)
     private var testStart = 0L
     private var isTesting = false
-    private val committedSuccessfulDeviceIds = mutableListOf<String>()
     private var startTest: Boolean = false
     private var testOnlyDevices = setOf<Int>()
+    private var testOnlyDevicesReflash: Boolean = true
+    private var testEraseFlash: Boolean = false
     private var isReady = false
     private var testRepeat = false
 
@@ -99,11 +105,13 @@ class ButterflyTrackerPanelTestingSuite(
     }
 
     override fun run() {
+        committedList.load()
         try {
             selfTest()
-        } catch (exception: Throwable) {
+        } catch (ex: Throwable) {
             switchboard.led(LedColor.RED)
-            logger.log(Level.SEVERE, "Self-test failed", exception)
+            logger.log(Level.SEVERE, "Self-test failed", ex)
+            LogManager.exceptionsLogger.log(Level.SEVERE, "Self-test error ${ex.message}", ex)
             return
         }
         isReady = true
@@ -113,8 +121,9 @@ class ButterflyTrackerPanelTestingSuite(
             try {
                 waitTestStart()
                 testStart()
-            } catch (exception: Throwable) {
-                logger.log(Level.SEVERE, "Standby error, can't continue", exception)
+            } catch (ex: Throwable) {
+                logger.log(Level.SEVERE, "Standby error, can't continue", ex)
+                LogManager.exceptionsLogger.log(Level.SEVERE, "Standby error ${ex.message}", ex)
                 return
             }
             synchronized(this) {
@@ -123,34 +132,32 @@ class ButterflyTrackerPanelTestingSuite(
             try {
                 testPresence()
                 testVoltage()
+
+                // TODO: Try to read IDs/Build before flash?
+                // Enumerating usb ports and getting info by serial will add delays.
+                // This helps to save time on flashing previously flashed devices (example panel is tested second time).
+                // But it will add time to testing fresh panels (cause of long usb enumeration timeouts).
+                // For now assume we a mostly testing fresh panels, so we do not need this check.
+
                 flashDevices()
-                if(eraseFlash) {
-                    testEnd()
+                if(testEraseFlash) {
+                    testEnd(TestStatus.NOT_UPDATED)
+                    // Do not test, do not commit
                     continue
                 }
                 enumerateAndTestDevices()
 
-                // TODO
-                //checkTestResults()
-                //commitTestResults()
-                //reportTestResults()
-                testEnd()
+                val ok = checkTestResults()
+                commitTestResults()
+                showTestErrors()
+                testEnd(if(ok) TestStatus.PASS else TestStatus.ERROR)
             } catch (exception: Throwable) {
                 logger.log(Level.SEVERE, "Tester error", exception)
             }
             synchronized(this) {
                 isTesting = false
             }
-            /*if (!testRepeat) {
-                var failed = getFailedDevices()
-                if (failed.isNotEmpty()) {
-                    logger.info("Repeating test for ${failed.size} devices...")
-                    testRepeat = true
-                    startTest(*failed.toIntArray())
-                }
-            } else {
-                testRepeat = false
-            }*/
+            repeatTestForFailedDevices()
         }
     }
 
@@ -165,25 +172,46 @@ class ButterflyTrackerPanelTestingSuite(
         startTest = false
     }
 
-    fun startTest(vararg devices: Int) {
+    fun startTest(vararg devices: Int, reflash: Boolean = true, eraseFlash: Boolean = false) {
         synchronized(this) {
             if (isTesting)
                 return
         }
         // TODO one device doesn't work somewhere, maybe hardware flash/reset error
         testOnlyDevices = setOf(*devices.toTypedArray())
+        testOnlyDevicesReflash = reflash
+        testEraseFlash = eraseFlash
         startTest = true
     }
 
-    private fun testEnd() {
+    fun repeatTestForFailedDevices() {
+        if (RETEST_RETRY && !testRepeat) {
+            var failed = getFailedDevices()
+            if (failed.isNotEmpty()) {
+                logger.info("Repeating test for ${failed.size} devices...")
+                testRepeat = true
+                startTest(*failed.toIntArray(), reflash = false)
+            }
+        } else {
+            testRepeat = false
+        }
+    }
+
+    private fun testEnd(status: TestStatus) {
         switchboard.disableAll()
         serialManager.removePort(dongle.serialPort!!)
         serialManager.closeAllPorts()
         testOnlyDevices = setOf()
         startTest = false
-        eraseFlash = false
+        testEraseFlash = false
         val testEnd = System.currentTimeMillis()
         statusLogger.info("Done in ${(testEnd - testStart) / 1000}s")
+        when(status) {
+            TestStatus.PASS -> switchboard.led(LedColor.GREEN)
+            TestStatus.ERROR -> switchboard.led(LedColor.RED)
+            TestStatus.NOT_UPDATED -> switchboard.led(LedColor.BLUE)
+            else -> Unit
+        }
         sleep(300)
     }
 
@@ -369,7 +397,10 @@ class ButterflyTrackerPanelTestingSuite(
                         deviceTests.add(device)
                     }
                 }
-                deviceTests[it] = DeviceTest(it)
+                // Do not recreate device, to prevent reflashing
+                //deviceTests[it] = DeviceTest(it)
+                deviceTests[it].testStatus = TestStatus.TESTING
+                deviceTests[it].deviceId = ""
                 statusLogger.info("Retesting device ${it + 1}")
                 testStart = System.currentTimeMillis()
             }
@@ -383,10 +414,10 @@ class ButterflyTrackerPanelTestingSuite(
             val device = DeviceTest(i)
             deviceTests.add(device)
         }
-        if(!eraseFlash) {
+        if(!testEraseFlash) {
             statusLogger.info("Testing...")
         } else {
-            statusLogger.info("ERASING")
+            statusLogger.info("!! ERASING !!")
         }
         testStart = System.currentTimeMillis()
         for (i in 0 until devices) {
@@ -411,13 +442,19 @@ class ButterflyTrackerPanelTestingSuite(
                 switchboard.device(ch, ON)
                 sleep(1)
 
-                val senseStartTime = System.currentTimeMillis()
+                //val senseStartTime = System.currentTimeMillis()
                 val sense1 = switchboard.isChannelPresent()
-                val sense1Result = actionPresence.action(sense1, if (sense1) "Device detected" else "Device not detected", senseStartTime)
-                if(!sense1) {
+                //val sense1Result = actionPresence.action(sense1, if (sense1) "Device detected" else "Device not detected", senseStartTime)
+                if (sense1) {
+                    logger.config("[${device.deviceNum + 1}/$devices] Device detected")
+                } else {
+                    logger.info("[${device.deviceNum + 1}/$devices] Skip empty slot")
                     ui.setID(device.deviceNum, "--- N/A ---")
+                    device.testStatus = TestStatus.DISCONNECTED
+                    ui.setStatus(device.deviceNum, device.testStatus)
                 }
-                addResult(device, sense1Result)
+                // Do not log the result
+                //addResult(device, sense1Result)
                 switchboard.device(ch, OFF)
             }
         }
@@ -426,7 +463,7 @@ class ButterflyTrackerPanelTestingSuite(
 
     private fun testVoltage() {
         switchboard.disableAll()
-        if(eraseFlash)
+        if(testEraseFlash)
             return
         for (channel in CHANNELS) {
             switchboard.channel(channel)
@@ -485,10 +522,17 @@ class ButterflyTrackerPanelTestingSuite(
         }
     }
 
-    private fun flashDevices() {
-        statusLogger.info("Flashing")
+    private val DEBUG_FLASHING_ERRORS = false
 
+    private fun flashDevices() {
+        if(FLASH_DEVICES) {
+            statusLogger.info("Flashing")
+        } else {
+            statusLogger.warning("Flashing skipped")
+            return
+        }
         switchboard.disableAll()
+        sleep(powerBalanceTimeMS)
         //sleep(1000) // Wait power drained
         switchboard.channel(ChannelMode.BOTH)
         switchboard.power(PowerMode.BATTERY)
@@ -509,15 +553,17 @@ class ButterflyTrackerPanelTestingSuite(
         var deviceList = deviceTests.toMutableList()
 
         //val imageFile = File(if(eraseFlash) emptyFile else firmwareFile).path!!
-        val imageFile = if(eraseFlash) emptyFile else firmwareFile
+        val imageFile = if(testEraseFlash) emptyFile else firmwareFile
 
         for (device in deviceList) {
             if (shouldSkipDevice(device.deviceNum))
                 continue
             if (!isDeviceInTesting(device)) {
-                logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
+                if(device.testStatus == TestStatus.ERROR)
+                    logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
             } else if (!device.flashingRequired) {
                 logger.info("[${device.deviceNum + 1}/$devices] Skipping already flashed device")
+                continue
             } else {
                 val ch = switchboard.mapDeviceToSwitchboard(device.deviceNum)
                 if (!switchboard.isDeviceOn(ch)) {
@@ -539,19 +585,15 @@ class ButterflyTrackerPanelTestingSuite(
                         timeout
                     )
                     val flashResult = flashAction.action("", "", startTime)
-                    //if (flashResult.status == TestStatus.ERROR) {
-                    //  logger.warning(flashResult.log)
-                    //}
+
+                    if (DEBUG_FLASHING_ERRORS && flashResult.status == TestStatus.ERROR) {
+                        logger.warning(flashResult.log)
+                    }
                     addResult(device, flashResult)
 
-                    if(eraseFlash && flashResult.status != TestStatus.ERROR) {
+                    if(testEraseFlash && flashResult.status != TestStatus.ERROR) {
                         showStatus(device, TestStatus.RETESTED)
                     }
-                    // Testing
-                    //if(flashResult.status != TestStatus.ERROR) {
-                    //    showStatus(device, TestStatus.PASS)
-                    //}
-
                     flashResult.status
                 }
                 swd.add(task)
@@ -579,27 +621,30 @@ class ButterflyTrackerPanelTestingSuite(
     }
 
     private fun enumerateAndTestDevices() {
-        switchboard.power(PowerMode.USB)
-        switchboard.channel(ChannelMode.A)
         for(i in 1..SERIAL_RETRIES) {
+            switchboard.disableAll()
+            sleep(powerBalanceTimeMS)
+            switchboard.power(PowerMode.USB)
+            switchboard.channel(ChannelMode.A)
             if (!enumerateSerialDevices(i))
                 break
             testDevices(i)
             clearSerial()
         }
-        // Cycle the power to properly handle device change on usb ports
         switchboard.disableAll()
+        // Cycle the power to properly handle device change on usb ports
         sleep(powerBalanceTimeMS)
-        switchboard.power(PowerMode.USB)
-        switchboard.channel(ChannelMode.B)
         for(i in 1..SERIAL_RETRIES) {
+            switchboard.disableAll()
+            sleep(powerBalanceTimeMS)
+            switchboard.power(PowerMode.USB)
+            switchboard.channel(ChannelMode.B)
             if (!enumerateSerialDevices(i))
                 break
             testDevices(i)
             clearSerial()
         }
-
-        // TODO: Ping devices from the dongle?
+        switchboard.disableAll()
 
         // TODO: Measure current draw in sleep
 
@@ -633,7 +678,7 @@ class ButterflyTrackerPanelTestingSuite(
         if (!hasUnfailedDevicesOnChannel())
             return false
 
-        if(retry != 0) {
+        if(retry > 1) {
             // Cycle the power on retry
             switchboard.device(ALL, OFF)
             sleep(serialEnumTimeMS / 2)
@@ -662,7 +707,7 @@ class ButterflyTrackerPanelTestingSuite(
 
         var foundSerials = 0
         var ports: List<SerialPort>
-        val knownPorts = mutableListOf<SerialPort>()
+        //val knownPorts = mutableListOf<SerialPort>()
         val endWait = System.currentTimeMillis() + 5000
         //var portsFound = 0
         do {
@@ -676,8 +721,9 @@ class ButterflyTrackerPanelTestingSuite(
             sleep(200)
         } while (System.currentTimeMillis() < endWait)
 
+        //logger.info("USB connected:")
         //SerialPort.getCommPorts().forEach {
-        //    logger.warning("${it.portLocation} | ${it.systemPortName} | ${it.vendorID.toHexString()}:${it.productID.toHexString()}:${it.serialNumber} | ${it.descriptivePortName}")
+        //    logger.info("${it.portLocation} | ${it.systemPortName} | ${it.vendorID.toHexString()}:${it.productID.toHexString()}:${it.serialNumber} | ${it.descriptivePortName}")
         //}
 
         //sleep(500)
@@ -685,7 +731,7 @@ class ButterflyTrackerPanelTestingSuite(
             //logger.warning("${it.portLocation} | ${it.systemPortName} | ${it.vendorID.toHexString()}:${it.productID.toHexString()}:${it.serialNumber} | ${it.descriptivePortName}")
             val device = devicePortLookup(it.portLocation, switchboard.channel()) ?: return@forEach
             device.serialPort = it
-            knownPorts.add(it)
+            //knownPorts.add(it)
             serialManager.markAsKnown(it)
             foundSerials++
             //logger.info("[${device.deviceNum + 1}/$devices] Device used: ${it.descriptivePortName} ${it.systemPortPath}")
@@ -714,7 +760,7 @@ class ButterflyTrackerPanelTestingSuite(
             }
         }
         statusLogger.info("Found $foundSerials/$portsCount serial devices")
-        knownPorts.forEach { serialManager.removePort(it) }
+        //knownPorts.forEach { serialManager.removePort(it) }
         return true
     }
 
@@ -726,12 +772,14 @@ class ButterflyTrackerPanelTestingSuite(
         for (device in deviceTests) {
             if (switchboard.deviceNumToChannel(device.deviceNum) != switchboard.channel())
                 continue
-            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
+            if (shouldSkipDevice(device.deviceNum))
                 continue
             if (!switchboard.isDeviceOn(switchboard.mapDeviceToSwitchboard(device.deviceNum)))
                 continue
-            if (device.testStatus == TestStatus.ERROR || device.serialPort == null) {
-                logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
+            if (!isDeviceInTesting(device) || device.serialPort == null) {
+                if (device.testStatus == TestStatus.ERROR || device.serialPort == null) {
+                    logger.warning("[${device.deviceNum + 1}/$devices] Skipped due to previous error")
+                }
                 continue
             }
             testDevice(device, device.serialPort!!, retry)
@@ -847,41 +895,56 @@ class ButterflyTrackerPanelTestingSuite(
                 val waitPongResult = SerialMatchingAction("Read pong info", pongResultSuccess, pongResultFail, device, 500)
                 val pongResult = waitPongResult.action("", "", startTime)
                 if(device.serialDisconnected) {
-                    return // to external retry loop
+                    if(retry < SERIAL_RETRIES) {
+                        showStatus(device, TestStatus.PORT_ERROR)
+                        device.deviceId = "" // Force to enumerate
+                        return // to external retry loop
+                    }
                 }
                 if(pongResult.endValue.lowercase().startsWith("timeout")) {
                     // Dongle can miss ping packet, so it is OK to retry again
                     if(i < PING_RETRIES) {
                         //logger.warning("[${device.deviceNum + 1}/$devices] No pong response. Retry...$i")
+                        showStatus(device, TestStatus.PORT_ERROR)
                         continue@retryPing
                     }
                 }
-                val match = pongResult.matchLog("PONG packet received from ([a-zA-Z0-9:]+), RSSI ([0-9]+)")
-                val pongAddress = match?.get(1) ?: ""
-                val pongRssi = match?.get(2)?.toInt() ?: 255
-                val pongOk = pongAddress.contentEquals(device.deviceId) && (pongRssi < PONG_RSSI_MIN)
-                val result = actionRadioPong.action(pongOk, match?.get(0) ?: "No pong packet", startTime)
-                // Address mismatch may be due to requests collision
-                // Low RSSI may be due to radio interference
-                // Both is OK, just retry again
-                if(result.status == TestStatus.ERROR) {
-                    if(i < PING_RETRIES) {
-                        //logger.warning("[${device.deviceNum + 1}/$devices] Failed pong response. Retry...$i")
-                        continue@retryPing
+                if(pongResult.status != TestStatus.PASS) {
+                    val match = pongResult.matchLog("PONG packet received from ([a-zA-Z0-9:]+), RSSI ([0-9]+)")
+                    val pongAddress = match?.get(1) ?: ""
+                    val pongRssi = match?.get(2)?.toInt() ?: 255
+                    val pongOk = pongAddress.contentEquals(device.deviceId) && (pongRssi < PONG_RSSI_MIN)
+                    val result = actionRadioPong.action(pongOk, match?.get(0) ?: "No pong packet", startTime)
+                    // Address mismatch may be due to requests collision
+                    // Low RSSI may be due to radio interference
+                    // Both is OK, just retry again
+                    if(result.status == TestStatus.ERROR) {
+                        if(i < PING_RETRIES) {
+                            //logger.warning("[${device.deviceNum + 1}/$devices] Failed pong response. Retry...$i")
+                            showStatus(device, TestStatus.ERROR)
+                            continue@retryPing
+                        }
                     }
+                    addResult(device, pongResult)
+                    addResult(device, result)
+                } else {
+                    addResult(device, pongResult)
                 }
-                // Record success or the latest error
-                addResult(device, pongResult)
-                addResult(device, result)
+                break@retryPing
             } else {
                 // Failed to send command means either device is disconnected
                 // or native exception (example SerialPortTimeoutException) that
                 // means port is not operable and we need to reopen it again
                 if(device.serialDisconnected) {
-                    return // to external retry loop
+                    if(retry < SERIAL_RETRIES) {
+                        showStatus(device, TestStatus.PORT_ERROR)
+                        device.deviceId = "" // Force to enumerate
+                        return // to external retry loop
+                    }
                 }
                 if(retry < SERIAL_RETRIES) {
                     logger.warning("[${device.deviceNum + 1}/$devices] Can't send serial command. Retry...$retry")
+                    device.deviceId = "" // Force to enumerate
                     device.testStatus = TestStatus.TESTING
                     showStatus(device, TestStatus.PORT_ERROR)
                     return // to external retry loop
@@ -902,6 +965,96 @@ class ButterflyTrackerPanelTestingSuite(
         }
     }
 
+    private fun checkTestResults(): Boolean {
+        var ok = true
+
+        val panelName: String by lazy {
+            deviceTests.joinToString(transform = {
+            "%02d:".format(it.deviceNum + 1) + when {
+                it.testStatus == TestStatus.DISCONNECTED -> "NA"
+                it.deviceId.isBlank() -> "ERR"
+                else -> it.deviceId
+                }
+            })
+        }
+        for (device in deviceTests) {
+            if (shouldSkipDevice(device.deviceNum) || device.testStatus == TestStatus.DISCONNECTED)
+                continue
+            device.endTime = System.currentTimeMillis()
+            if (device.testStatus == TestStatus.ERROR) {
+                if(device.deviceId.isBlank()) {
+                    // Add a placeholder for failed devices
+                    device.addTestResult(TestResult("Panel info", TestStatus.PASS, device.endTime, device.endTime, panelName, ""))
+                    device.deviceId = "$EMPTY_ID_PREFIX${"%02d".format(device.deviceNum + 1)}"
+                    ui.setID(device.deviceNum, device.deviceId)
+                    logger.warning("[${device.deviceNum + 1}/$devices] ${device.deviceId} = $panelName")
+                }
+                ok = false
+            } else if (device.testStatus != TestStatus.RETESTED) {
+                device.testStatus = TestStatus.PASS
+                ui.setStatus(device.deviceNum, TestStatus.PASS)
+            }
+            device.serialPort?.let { serialManager.closePort(it) }
+        }
+        return ok
+    }
+
+    private fun showTestErrors() {
+        logger.info("== Test results ===")
+        for (device in deviceTests) {
+            if (shouldSkipDevice(device.deviceNum))
+                continue
+            when(device.testStatus) {
+                TestStatus.PASS ->
+                    logger.config("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Test success")
+                TestStatus.ERROR -> {
+                    logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Test failed")
+                    for (test in device.testsList) {
+                        if (test.status == TestStatus.ERROR) {
+                            logger.severe(test.toString() + "\n" + test.log)
+                            statusLogger.severe("[${device.deviceNum + 1}] ${test.testName}: ${test.endValue}")
+                        }
+                    }
+                }
+                TestStatus.DISCONNECTED -> {} // Skip
+                else -> {
+                    logger.severe("[${device.deviceNum + 1}/$devices] ${device.deviceId}: Has unexpected status {$device.testStatus}")
+                }
+            }
+        }
+    }
+
+    private fun commitTestResults() {
+        if(SUBMIT_RESULTS) {
+            logger.info("Committing the test results to database...")
+        } else {
+            logger.warning("Skip committing test results")
+            return
+        }
+        for (device in deviceTests) {
+            if (shouldSkipDevice(device.deviceNum) || device.testStatus == TestStatus.DISCONNECTED)
+                continue
+            if (device.deviceId.isBlank()) {
+                logger.info("[${device.deviceNum + 1}/$devices] Skipping, no ID")
+                continue
+            }
+            if(committedList.has(device.deviceId)) {
+                logger.info("[${device.deviceNum + 1}/$devices] Skipping, recently committed as ${device.deviceId}")
+                ui.setStatus(device.deviceNum, TestStatus.RETESTED)
+                continue
+            }
+            for (db in dbs) {
+                val response = db.sendTestData(device)
+                logger.config("[${device.deviceNum + 1}/$devices] ${device.deviceId}: $response")
+            }
+            if (device.deviceId.startsWith(EMPTY_ID_PREFIX))
+                continue // Do not cache
+            if (device.testStatus == TestStatus.PASS) {
+                committedList.append(device.deviceId)
+            }
+        }
+    }
+
     private fun hasUnfailedDevicesOnChannel(): Boolean {
         for (d in 0 until devices) {
             if (switchboard.channel() != switchboard.deviceNumToChannel(d))
@@ -911,14 +1064,6 @@ class ButterflyTrackerPanelTestingSuite(
             if (deviceTests[d].testStatus != TestStatus.ERROR)
                 return true
         }
-        /*for (device in deviceTests) {
-            if (switchboard.channel() != switchboard.deviceNumToChannel(device.deviceNum))
-                continue
-            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
-                continue
-            if (device.testStatus != TestStatus.ERROR)
-                return true
-        }*/
         return false
     }
 

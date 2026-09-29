@@ -3,9 +3,13 @@ package dev.slimevr.testing
 import com.fazecast.jSerialComm.SerialPort
 import com.fazecast.jSerialComm.SerialPortEvent
 import com.fazecast.jSerialComm.SerialPortMessageListener
+import dev.slimevr.logger.LogManager
 import java.io.OutputStreamWriter
+import java.io.StringWriter
+import java.io.PrintWriter
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.logging.Level
 import java.util.logging.Logger
 
 
@@ -16,6 +20,10 @@ open class DeviceTest(
     var deviceNum: Int,
     val logger: Logger = Logger.getLogger("devices")
 ): SerialPortMessageListener {
+
+    init {
+        logger.setLevel(Level.WARNING)
+    }
 
     var deviceId = ""
     var testStatus = TestStatus.TESTING
@@ -60,13 +68,18 @@ open class DeviceTest(
                 }
                 logger.info("[${deviceNum+1}] Serial: -> $command")
             } catch (e: Throwable) {
-                e.printStackTrace()
+                //e.printStackTrace()
+                logger.log(Level.SEVERE, "Serial port send error: ${e.message}", e)
+                LogManager.exceptionsLogger.log(Level.SEVERE, "Error displaying unhanded exception", e)
                 return false
             }
         }
         return true
     }
 
+    /**
+     * SerialPort callback after SerialManager.openPort until SerialManager.closePort
+     */
     override fun serialEvent(event: SerialPortEvent?) {
         if (event!!.eventType == SerialPort.LISTENING_EVENT_DATA_RECEIVED) {
             val newData = event.receivedData
@@ -77,7 +90,7 @@ open class DeviceTest(
                 serialLog.addAll(nonBlank)
             }
             for(line in nonBlank)
-                    logger.info("[${deviceNum+1}] Serial: $line")
+                logger.info("[${deviceNum+1}] Serial: $line")
         } else if (event.eventType == SerialPort.LISTENING_EVENT_PORT_DISCONNECTED) {
             synchronized(serialLog) {
                 if(serialDisconnected)

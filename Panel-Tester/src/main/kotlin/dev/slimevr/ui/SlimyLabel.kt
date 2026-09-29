@@ -191,7 +191,7 @@ class SlimyLabel : AbstractComponent<SlimyLabel> {
                     try {
                         cachedLines = TerminalTextUtils.getWordWrappedText(availableColumns, *component.lines)
                     } catch (t: Throwable) {
-                        LogManager.onlyFileLogger.log(
+                        LogManager.exceptionsLogger.log(
                             Level.SEVERE,
                             "Funky stuff with lines:\n${component.lines.joinToString { "\n" }}\nThe exception is:"
                         )

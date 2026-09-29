@@ -1,5 +1,6 @@
 package dev.slimevr.testing.actions
 
+import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.TestResult
 import dev.slimevr.testing.TestStatus
 import java.io.File
@@ -83,6 +84,7 @@ class ExecuteCommandAction(
                 }
             } catch(ex: IOException) {
                 ex.message?.let { fullLog.add(it) }
+                LogManager.exceptionsLogger.log(Level.SEVERE, "Error executing command", ex)
                 break
             }
             fullLog.subList(logStart, fullLog.size).forEach {

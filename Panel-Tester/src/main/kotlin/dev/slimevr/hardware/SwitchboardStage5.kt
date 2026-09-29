@@ -101,6 +101,7 @@ class SwitchboardStage5(
         rstPin.setState(enable)
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun resetSWD(deviceChannel : ChannelMode, deviceNum : Int) {
         // TODO: Reset by SWD command
     }

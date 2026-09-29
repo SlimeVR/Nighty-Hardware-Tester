@@ -1,14 +1,14 @@
 package dev.slimevr.hardware.serial
 
 import com.fazecast.jSerialComm.SerialPort
-import com.fazecast.jSerialComm.SerialPortMessageListener
+import dev.slimevr.hardware.serial.PortFilter
 
-class ESPPortChecker: SerialPortChecker {
+class ButterflyTrackerPortFilter: PortFilter {
 
     override fun isValidPort(port: SerialPort): Boolean {
-        if(!port.systemPortPath.startsWith("/dev/ttyUSB") && !port.systemPortPath.startsWith("\\\\.\\COM"))
+        if(!port.systemPortPath.startsWith("/dev/ttyACM"))
             return false
-        arrayOf("ch340", "cp21", "ch910", "usb", "seri").forEach {
+        arrayOf("butterfly").forEach {
             if(port.descriptivePortName.lowercase().contains(it) && !port.descriptivePortName.lowercase().contains("bluetooth"))
                 return true
         }

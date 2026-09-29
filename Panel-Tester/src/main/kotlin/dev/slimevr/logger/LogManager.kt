@@ -2,15 +2,14 @@ package dev.slimevr.logger
 
 import java.io.File
 import java.io.IOException
-import java.io.PrintStream
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.*
 
 object LogManager {
     private val initialized = AtomicBoolean(false)
-    var global = Logger.getLogger("")
-    var onlyFileLogger = Logger.getLogger("file-logger")
+    var global: Logger = Logger.getLogger("")
+    var exceptionsLogger: Logger = Logger.getLogger("file-logger")
 
     @Throws(SecurityException::class, IOException::class)
     fun initialize(mainLogDir: File) {
@@ -32,10 +31,10 @@ object LogManager {
         fileHandler.formatter = loc
         global.addHandler(fileHandler)
 
-        val onlyFileLoggerHandler = FileHandler("unhandled.log", 25 * 1000000, 1)
-        onlyFileLoggerHandler.formatter = loc
-        onlyFileLogger.addHandler(onlyFileLoggerHandler)
-        onlyFileLogger.useParentHandlers = false
+        val exceptionsLoggerHandler = FileHandler("unhandled.log", 25 * 1000000, 1)
+        exceptionsLoggerHandler.formatter = loc
+        exceptionsLogger.addHandler(exceptionsLoggerHandler)
+        exceptionsLogger.useParentHandlers = false
     }
 
     fun removeNonFileHandlers() {

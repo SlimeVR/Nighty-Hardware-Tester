@@ -2,9 +2,11 @@ package dev.slimevr.hardware.serial
 
 import com.fazecast.jSerialComm.SerialPort
 import com.fazecast.jSerialComm.SerialPortMessageListener
+import dev.slimevr.hardware.serial.PortFilter
+import dev.slimevr.hardware.serial.ESPPortFilter
 
 class SerialManager(
-    private val portChecker: SerialPortChecker = ESPPortChecker(),
+    private val portFilter: PortFilter = ESPPortFilter(),
     private val sendReset: Boolean = true
     ) {
 
@@ -12,7 +14,7 @@ class SerialManager(
 
     @Synchronized
     fun findNewPorts(): List<SerialPort> {
-        return SerialPort.getCommPorts().filter { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } == 0) and portChecker.isValidPort(it) }
+        return SerialPort.getCommPorts().filter { (knownPorts.count { p -> p.systemPortPath.equals(it.systemPortPath) } == 0) and portFilter.isValidPort(it) }
     }
 
     fun openPort(port: SerialPort, listener: SerialPortMessageListener): Boolean {

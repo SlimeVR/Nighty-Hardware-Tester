@@ -35,7 +35,7 @@ fun main(args: Array<String>) {
         try {
             LogManager.global.log(Level.SEVERE, "Unhandled exception in ${t.name}", e)
         } catch (everythingDead: Throwable) {
-            LogManager.onlyFileLogger.log(Level.SEVERE, "Error displaying unhanded exception", e)
+            LogManager.exceptionsLogger.log(Level.SEVERE, "Error displaying unhanded exception", e)
             sleep(10000)
             exitProcess(-1)
         }

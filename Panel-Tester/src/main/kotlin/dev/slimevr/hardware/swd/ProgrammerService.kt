@@ -16,9 +16,10 @@ class ProgrammerService(
         var future: Future<TestStatus>?
     )
 
-    // Slow RPi3a is able to flash in 5 threads
+    // Slow RPi3a is able to flash in 5 threads (total 10 targets)
     // RPi4b reliably can do only 4 cause of the datarace issue
-    private val threadsCount: Int = 4
+    // NOTE: This limit seems USB bandwiths or USB controller speed relatable
+    private val threadsCount: Int = 2
     private val runImmediately: Boolean = false
     val shaffle: Boolean = false
     private var exec = Executors.newFixedThreadPool(threadsCount)

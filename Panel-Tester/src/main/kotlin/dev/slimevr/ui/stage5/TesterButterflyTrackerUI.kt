@@ -140,7 +140,7 @@ class TesterButterflyTrackerUI(
                     lch == 'r' -> {
                         val failed = suite.getFailedDevices()
                         if(failed.isNotEmpty())
-                            suite.startTest(*failed.toIntArray())
+                            suite.startTest(*failed.toIntArray(), reflash = false)
                     }
                     lch == 'u' -> {
                         suite.startTest(0, 1, 2, 3, 4)
@@ -163,8 +163,7 @@ class TesterButterflyTrackerUI(
                         suite.startTest(15, 16, 17, 18, 19)
                     }
                     lch == 'e' -> {
-                        suite.eraseFlash = true
-                        suite.startTest()
+                        suite.startTest(reflash = true, eraseFlash = true)
                     }
                 }
             }
