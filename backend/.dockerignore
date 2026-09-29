@@ -7,3 +7,4 @@ npm-debug.log
 .next
 .git
 docker-compose*.yml
+postgres-data
