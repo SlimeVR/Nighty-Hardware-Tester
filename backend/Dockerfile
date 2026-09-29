@@ -51,7 +51,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
-RUN yarn add prisma
+RUN yarn add prisma@4.9.0
 
 COPY ./docker/start.sh /start.sh
 COPY --from=builder /app/next.config.mjs ./
