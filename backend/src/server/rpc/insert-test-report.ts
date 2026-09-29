@@ -1,5 +1,8 @@
 import { prisma } from "@/server/db/client";
-import { TestReportValidator } from "@/server/dtos/helper";
+import {
+  TestReportStateToPrisma,
+  TestReportValidator,
+} from "@/server/dtos/helper";
 import { err, ok, Result } from "@/utils/result";
 import { TestReportValue } from "@prisma/client";
 import { NextApiRequest, NextApiResponse } from "next";
@@ -25,6 +28,7 @@ export const handleInsertTestReportRPC = async (
         startedAt: new Date(params.startedAt),
         endedAt: new Date(params.endedAt),
         tester: params.tester,
+        state: TestReportStateToPrisma(params.state),
         values: {
           createMany: {
             data: params.values.map(

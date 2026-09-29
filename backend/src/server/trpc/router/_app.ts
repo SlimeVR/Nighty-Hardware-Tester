@@ -1,3 +1,4 @@
+import { State } from "@prisma/client";
 import { z } from "zod";
 import { TestReportToDto } from "../../dtos/helper";
 import { DatabasePagination } from "../../dtos/validation";
@@ -26,8 +27,11 @@ export const appRouter = router({
           },
           where: {
             id: input.id === null ? undefined : { search: input.id },
-            values: input.onlyFailedReports
-              ? { some: { failed: input.onlyFailedReports } }
+            OR: input.onlyFailedReports
+              ? [
+                  { state: State.Failed },
+                  { state: null, values: { some: { failed: true } } },
+                ]
               : undefined,
           },
         })

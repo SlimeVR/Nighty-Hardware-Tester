@@ -62,9 +62,7 @@ export const ReportComponent: FC<{ report: TestReport }> = ({ report }) => {
     <div
       className={clsx(
         "space-y-1 rounded-lg border border-l-4 border-gray-800 bg-card",
-        report.values.some((v) => v.failed)
-          ? "border-l-red-600"
-          : "border-l-green-600"
+        report.state === "failed" ? "border-l-red-600" : "border-l-green-600"
       )}
       key={report.id}
     >

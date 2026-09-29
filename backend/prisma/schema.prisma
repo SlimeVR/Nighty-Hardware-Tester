@@ -8,6 +8,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum State {
+  Failed
+  Succeeded
+}
+
 model TestReport {
   uuid String @id @unique @default(uuid()) @db.Uuid
 
@@ -15,6 +20,7 @@ model TestReport {
   type   String
   values TestReportValue[]
   tester String            @default("unknown")
+  state  State?
 
   startedAt DateTime @default(now())
   endedAt   DateTime @default(now()) @map("testedAt")

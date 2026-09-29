@@ -1,4 +1,4 @@
-import { TestReport, TestReportValue } from "@prisma/client";
+import { State, TestReport, TestReportValue } from "@prisma/client";
 import { z } from "zod";
 
 export const TestReportValueValidator = z.object({
@@ -31,24 +31,44 @@ export const TestReportValidator = z.object({
   type: z.string().trim().min(1),
   tester: z.string().trim().min(1),
   values: z.array(TestReportValueValidator),
+  state: z.enum(["failed", "succeeded"]).nullish(),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
 });
+export type TestReportStateDto = "failed" | "succeeded";
+export const TestReportStateToPrisma = (
+  state: TestReportStateDto | null | undefined
+): State | null =>
+  state === "failed"
+    ? State.Failed
+    : state === "succeeded"
+    ? State.Succeeded
+    : null;
+
 export type TestReportDto = Omit<
   z.infer<typeof TestReportValidator>,
-  "values"
+  "values" | "state"
 > & {
   uuid: string;
   values: TestReportValueDto[];
+  state: TestReportStateDto;
 };
 export const TestReportToDto = (
   report: TestReport & { values: TestReportValue[] }
-): TestReportDto => ({
-  uuid: report.uuid,
-  id: report.id,
-  type: report.type,
-  tester: report.tester,
-  values: report.values.map(TestReportValueToDto),
-  startedAt: report.startedAt.toISOString(),
-  endedAt: report.endedAt.toISOString(),
-});
+): TestReportDto => {
+  const noValuesFailed =
+    report.state === null && !report.values.some((v) => v.failed);
+  const state =
+    report.state === State.Succeeded || noValuesFailed ? "succeeded" : "failed";
+
+  return {
+    uuid: report.uuid,
+    id: report.id,
+    type: report.type,
+    tester: report.tester,
+    values: report.values.map(TestReportValueToDto),
+    state,
+    startedAt: report.startedAt.toISOString(),
+    endedAt: report.endedAt.toISOString(),
+  };
+};
