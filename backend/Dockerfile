@@ -1,7 +1,9 @@
 ##### DEPENDENCIES
 
-FROM --platform=linux/amd64 node:16-alpine AS deps
-RUN apk add --no-cache libc6-compat openssl1.1-compat
+FROM --platform=linux/amd64 node:24-alpine AS base
+RUN apk add --no-cache libc6-compat openssl
+
+FROM base AS deps
 WORKDIR /app
 
 # Install Prisma Client - remove if not using Prisma
@@ -21,7 +23,7 @@ RUN \
 
 ##### BUILDER
 
-FROM --platform=linux/amd64 node:16-alpine AS builder
+FROM base AS builder
 ARG DATABASE_URL
 ARG NEXT_PUBLIC_CLIENTVAR
 WORKDIR /app
@@ -41,7 +43,7 @@ RUN \
 
 ##### RUNNER
 
-FROM --platform=linux/amd64 node:16-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
@@ -49,7 +51,6 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
-RUN apk add --no-cache libc6-compat openssl1.1-compat
 RUN yarn add prisma
 
 COPY ./docker/start.sh /start.sh
