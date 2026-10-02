@@ -12,6 +12,7 @@ import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.hardware.swd.ProgrammerService
 import dev.slimevr.hardware.usb.USBDmesgWatcher
 import dev.slimevr.hardware.usb.USBNotify
+import dev.slimevr.hardware.ads1x15.*
 import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.*
 import dev.slimevr.testing.actions.ExecuteCommandAction
@@ -50,19 +51,23 @@ class ButterflyTrackerPanelTestingSuite(
     private val serialOpenTimeMS = 200L
     private val SERIAL_RETRIES = 3
     private val PING_RETRIES = 5
+    private val SLEEP_RETRIES = 3
 
     private val FLASH_DEVICES = true
+    private val TEST_DEEP_SLEEP_CURRENT = false
+    private val speepBootTimeMS = 3000L // 1000L // XXX
     private val SUBMIT_RESULTS = true
     private val RETEST_RETRY = true
 
     private val actionPowerGood = SuccessAction("Power good")
-    //private val actionVBusRef = VoltageTestAction("VBUS reference", 4.8f, 5.5f) // 5V
-    private val actionVBatRef = VoltageTestAction("VBat reference", 3.15f, 3.45f) // 3v3
+    //private val actionVBusRef = VoltageTestAction("VBUS reference", 4.8f, 5.5f) // Vbus = 5V
+    private val actionVBatRef = VoltageTestAction("VBat reference", 3.2f, 3.5f) // Vbat = 3v43
     private val actionVoutUsb = VoltageTestAction("Vout voltage from USB power", 4.4f, 5.3f) // Vdd = 5V - Shottkey drop (0.2..0.4v)
-    private val actionVoutBat = VoltageTestAction("Vout voltage from BAT power", 3.15f, 3.45f) // Vdd = Vbat
-    private val actionBusFromBat = VoltageTestAction("Target voltage from Bat power", 2.9f, 3.2f) // 3v0
-    private val actionBusFromUsb = VoltageTestAction("Target voltage from USB power", 2.9f, 3.2f) // 3v0
+    private val actionVoutBat = VoltageTestAction("Vout voltage from BAT power", 3.2f, 3.5f) // Vdd = Vbat
+    private val actionBusFromBat = VoltageTestAction("Target voltage from Bat power", 2.9f, 3.1f) // 3v0
+    private val actionBusFromUsb = VoltageTestAction("Target voltage from USB power", 2.9f, 3.1f) // 3v0
     private val actionIoutBlank = VoltageTestAction("Current draw", 0f, 20f) // empty 3.5mA (flashed 7.5mA, TX 12mA)
+    private val actionIoutSleep = VoltageTestAction("Deep Sleep Current draw", 0.002f, 0.01f) // 7.5uA = 0.0075mA
 
     private val actionPresence = PresenceAction("Presence")
     private val actionSerialFound = SuccessAction("Search serial port")
@@ -72,6 +77,7 @@ class ButterflyTrackerPanelTestingSuite(
     private val actionGetIMU = SuccessAction("Test IMU")
     private val failSendPingCommand = FailedAction("Fail send PING command")
     private val actionRadioPong = SuccessAction("Test Radio")
+    private val failSendShutdownCommand = FailedAction("Fail send SHUTDOWN command")
 
     private val firmwareFile = System.getenv("TESTER_FIRMWARE_FILE")
     private val FIRMWARE_HASH = System.getenv("TESTER_FIRMWARE_COMMIT") // Git hash
@@ -153,6 +159,7 @@ class ButterflyTrackerPanelTestingSuite(
                 testEnd(if(ok) TestStatus.PASS else TestStatus.ERROR)
             } catch (exception: Throwable) {
                 logger.log(Level.SEVERE, "Tester error", exception)
+                switchboard.led(LedColor.RED)
             }
             synchronized(this) {
                 isTesting = false
@@ -222,6 +229,8 @@ class ButterflyTrackerPanelTestingSuite(
      */
     private fun getBatCurrent(): Float = 10f * getIoutVoltage()
     private fun getIoutVoltage(): Float = adc.ADS1X15_1.getVoltage(0u)
+    private fun selectAdcGain(gain: UInt) = adc.ADS1X15_1.setPGA(gain)
+    private fun selectAdcRate(rate: UInt) = adc.ADS1X15_1.setDatarate(rate)
     /** VBat target test-point */
     private fun getBatVoltage(): Float = adc.ADS1X15_1.getVoltage(1u)
     /** 3V targer test-point */
@@ -239,6 +248,7 @@ class ButterflyTrackerPanelTestingSuite(
     }
 
     private fun testSelfVoltages() {
+        selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_6_144V)
         switchboard.disableAll()
         sleep(powerBalanceTimeMS)
         if (switchboard.isChannelPresent()) {
@@ -490,10 +500,13 @@ class ButterflyTrackerPanelTestingSuite(
                     !batPg,
                     if (batPg) "VBAT_PG: Over-current detected" else "Power OK", batPgStartTime
                 )
+
+                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V)
                 val vBatResult = actionVBatRef.action(getBatVoltage(), "", System.currentTimeMillis())
                 val vOutFromBatResult = actionVoutBat.action(getOutVoltage(), "", System.currentTimeMillis())
                 val vBusFromBatResult = actionBusFromBat.action(getBusVoltage(), "", System.currentTimeMillis())
-                val vIoutResult = actionIoutBlank.action(getBatCurrent(), "", System.currentTimeMillis())
+                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V) // 4V = 40mA max
+                val vIoutResult = actionIoutBlank.action(getBatCurrent(), "", System.currentTimeMillis()) // ~0.3-10mA
                 addResult(device, batPgResult)
                 addResult(device, vBatResult)
                 addResult(device, vOutFromBatResult)
@@ -510,8 +523,11 @@ class ButterflyTrackerPanelTestingSuite(
                     !busPg,
                     if (busPg) "VBUS_PG: Over-current detected" else "Power OK", busPgStartTime
                 )
-                val vOutFromUsbResult = actionVoutUsb.action(getOutVoltage(), "", System.currentTimeMillis())
-                val vBusFromUsbResult = actionBusFromUsb.action(getBusVoltage(), "", System.currentTimeMillis())
+                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_6_144V)
+                val vOutFromUsbResult = actionVoutUsb.action(getOutVoltage(), "", System.currentTimeMillis()) // ~5V
+                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V)
+                val vBusFromUsbResult = actionBusFromUsb.action(getBusVoltage(), "", System.currentTimeMillis()) // ~3V
+                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_DEFAULT)
                 addResult(device, busPgResult)
                 addResult(device, vOutFromUsbResult)
                 addResult(device, vBusFromUsbResult)
@@ -537,8 +553,8 @@ class ButterflyTrackerPanelTestingSuite(
         switchboard.channel(ChannelMode.BOTH)
         switchboard.power(PowerMode.BATTERY)
         // Sequently power on to avoid huge surge
-        for(i in 0 until 10) {
-            switchboard.device(i, ON)
+        for(ch in 0 until 10) {
+            switchboard.device(ch, ON)
             sleep(powerBalanceTimeMS / 2)
         }
 
@@ -645,10 +661,7 @@ class ButterflyTrackerPanelTestingSuite(
             clearSerial()
         }
         switchboard.disableAll()
-
-        // TODO: Measure current draw in sleep
-
-        switchboard.disableAll()
+        testDeepSleep()
     }
 
     fun Int.toHexString(): String = String.format("%02x", this)
@@ -800,6 +813,7 @@ class ButterflyTrackerPanelTestingSuite(
 
                 if(device.serialDisconnected) {
                     if(retry < SERIAL_RETRIES) {
+                        serialManager.closePort(port)
                         logger.warning("[${device.deviceNum + 1}/$devices] Port disconnected. Retry...$retry")
                         device.testStatus = TestStatus.TESTING
                         showStatus(device, TestStatus.PORT_ERROR)
@@ -811,13 +825,13 @@ class ButterflyTrackerPanelTestingSuite(
                 // Failed to send command means either device is disconnected
                 // or native exception (example SerialPortTimeoutException) that
                 // means port is not operable and we need to reopen it again
+                serialManager.closePort(port)
                 if(retry < SERIAL_RETRIES) {
                     logger.warning("[${device.deviceNum + 1}/$devices] Can't send serial command. Retry...$retry")
                     device.testStatus = TestStatus.TESTING
                     showStatus(device, TestStatus.PORT_ERROR)
                     return
                 }
-                serialManager.closePort(port)
                 val result = failSendInfoCommand.action("Serial command error", startTime)
                 addResult(device, result)
             }
@@ -873,6 +887,7 @@ class ButterflyTrackerPanelTestingSuite(
 
             // Ping the dongle
             checkDonglePing(device, retry)
+            tryGotoSleep(device, retry)
         } else {
             if(retry < SERIAL_RETRIES) {
                 logger.warning("[${device.deviceNum + 1}/$devices] Serial response failed. Retry...$retry")
@@ -937,8 +952,9 @@ class ButterflyTrackerPanelTestingSuite(
                 // means port is not operable and we need to reopen it again
                 if(device.serialDisconnected) {
                     if(retry < SERIAL_RETRIES) {
-                        showStatus(device, TestStatus.PORT_ERROR)
                         device.deviceId = "" // Force to enumerate
+                        device.testStatus = TestStatus.TESTING
+                        showStatus(device, TestStatus.PORT_ERROR)
                         return // to external retry loop
                     }
                 }
@@ -955,6 +971,58 @@ class ButterflyTrackerPanelTestingSuite(
         }
     }
 
+    private val shutdownResultSuccess = arrayOf("System off requested".toRegex())
+    private val shutdownResultFail = arrayOf("Unknown command".toRegex())
+
+    private fun tryGotoSleep(device: DeviceTest, retry: Int) {
+        if(!TEST_DEEP_SLEEP_CURRENT)
+            return
+        val waitResponse = true
+        if(waitResponse) {
+            retryCommand@ for(i in 1..SLEEP_RETRIES) {
+                val startTime = System.currentTimeMillis()
+                if (device.sendSerialCommand("shutdown")) {
+                    val waitCommandResult = SerialMatchingAction("Read shutdown info", shutdownResultSuccess, shutdownResultFail, device, 500)
+                    val commandResult = waitCommandResult.action("", "", startTime)
+                    addResult(device, commandResult)
+                    if(commandResult.status == TestStatus.PASS) {
+                        val ch = switchboard.mapDeviceToSwitchboard(device.deviceNum)
+                        switchboard.device(ch, OFF) // Switch off bus power
+                        device.testStatus = TestStatus.DISCONNECTED // Prevent it from powering up during the retest
+                    }
+                    break@retryCommand
+                } else {
+                    // Failed to send command means either device is disconnected
+                    // or native exception (example SerialPortTimeoutException) that
+                    // means port is not operable and we need to reopen it again
+                    if(device.serialDisconnected) {
+                        if(retry < SERIAL_RETRIES) {
+                            device.deviceId = "" // Force to enumerate
+                            device.testStatus = TestStatus.TESTING
+                            showStatus(device, TestStatus.PORT_ERROR)
+                            return // to external retry loop
+                        }
+                    }
+                    if(retry < SERIAL_RETRIES) {
+                        logger.warning("[${device.deviceNum + 1}/$devices] Can't send serial command. Retry...$retry")
+                        device.deviceId = "" // Force to enumerate
+                        device.testStatus = TestStatus.TESTING
+                        showStatus(device, TestStatus.PORT_ERROR)
+                        return // to external retry loop
+                    }
+                    val result = failSendShutdownCommand.action("Serial command error", startTime)
+                    addResult(device, result)
+                }
+            }
+        } else {
+            val ch = switchboard.mapDeviceToSwitchboard(device.deviceNum)
+            device.sendSerialCommand("shutdown")
+            sleep(500)
+            switchboard.device(ch, OFF) // Switch off bus power
+            device.testStatus = TestStatus.DISCONNECTED // Prevent it from powering up during the retest
+        }
+    }
+
     private fun clearSerial() {
         serialManager.removePort(dongle.serialPort!!)
         serialManager.closeAllPorts()
@@ -963,6 +1031,73 @@ class ButterflyTrackerPanelTestingSuite(
             device.serialPort = null
             ui.setUSB(device.deviceNum, "")
         }
+    }
+
+    private fun testDeepSleep() {
+        if(TEST_DEEP_SLEEP_CURRENT) {
+            statusLogger.info("Testing deep sleep mode...")
+        } else {
+            statusLogger.warning("Deep sleep test skipped")
+            return
+        }
+        sleep(powerBalanceTimeMS)
+        switchboard.power(PowerMode.BATTERY)
+        for (channel in CHANNELS) {
+            switchboard.channel(channel)
+            for (i in 0 until devices) {
+                if (switchboard.deviceNumToChannel(i) != switchboard.channel())
+                    continue
+                if (shouldSkipDevice(i))
+                    continue
+                if(deviceTests[i].testStatus == TestStatus.ERROR)
+                    logger.warning("[${i + 1}/$devices] Skipped due to previous error")
+                else if(deviceTests[i].testStatus == TestStatus.DISCONNECTED)
+                {
+                    if(deviceTests[i].deviceId.isBlank())
+                        continue // Skip empty slot
+
+                    // Ready to boot for deep sleep mode
+                    val device = deviceTests[i]
+                    val ch = switchboard.mapDeviceToSwitchboard(i)
+                    switchboard.device(ch, ON)
+                    //sleep(speepBootTimeMS) // XXX
+                    deviceTests[i].testStatus = TestStatus.TESTING
+
+                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_0_256V)
+                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_6_144V)
+                    selectAdcRate(dev.slimevr.hardware.ads1x15.ADS1X15_DR_8SPS)
+                    while(!switchboard.isButtonPressed()) {
+                       val current = getBatCurrent().toString()
+                       val batPg = switchboard.isPowerFaultTriggered()
+                       val pgStr = if(batPg) " FAULT" else ""
+                       logger.info("${current}${pgStr}")
+                       sleep(100)
+                    }
+                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_DEFAULT)
+
+                    val batPgStartTime = System.currentTimeMillis()
+                    val batPg = switchboard.isPowerFaultTriggered()
+                    val batPgResult = actionPowerGood.action(
+                        !batPg,
+                        if (batPg) "VBAT_PG: Over-current detected" else "Power OK", batPgStartTime
+                    )
+                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V)
+                    val vBatResult = actionVBatRef.action(getBatVoltage(), "", System.currentTimeMillis())
+                    val vOutFromBatResult = actionVoutBat.action(getOutVoltage(), "", System.currentTimeMillis())
+                    val vBusFromBatResult = actionBusFromBat.action(getBusVoltage(), "", System.currentTimeMillis())
+                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_0_256V)
+                    val vIoutResult = actionIoutSleep.action(getBatCurrent(), "", System.currentTimeMillis())
+                    addResult(device, batPgResult)
+                    addResult(device, vBatResult)
+                    addResult(device, vOutFromBatResult)
+                    addResult(device, vBusFromBatResult)
+                    addResult(device, vIoutResult)
+
+                    switchboard.device(ch, OFF)
+                }
+            }
+        }
+        switchboard.disableAll()
     }
 
     private fun checkTestResults(): Boolean {

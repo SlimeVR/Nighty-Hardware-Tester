@@ -213,7 +213,7 @@ class ADS1X15(
         if (volts < 0)
             return volts
 
-        volts *= value
+        volts *= if(value < 32768) value else value - 65536
         if (_config and ADS_CONF_RES_16 > 0u)
         {
             volts /= 32767  //  value = 16 bits - sign bit = 15 bits mantissa
@@ -237,7 +237,7 @@ class ADS1X15(
         }
     }
 
-    fun setPGA(gain: UInt = ADS1X15_PGA_DEFAULT) {
+    fun setPGA(gain: UInt = ADS1X15_PGA_DEFAULT): Unit {
         assert(
             gain in listOf(
                 ADS1X15_PGA_6_144V,
@@ -251,7 +251,7 @@ class ADS1X15(
         _gain = gain
     }
 
-    fun setDatarate(rate: UInt = ADS1X15_DR_DEFAULT) {
+    fun setDatarate(rate: UInt = ADS1X15_DR_DEFAULT): Unit {
         assert(
             rate in listOf(
                 ADS1X15_DR_8SPS,
@@ -267,9 +267,9 @@ class ADS1X15(
         _datarate = rate
     }
 
-    fun setDefault() {
-        setPGA(ADS1X15_PGA_6_144V)
-        setDatarate(ADS1X15_DR_128SPS)
+    fun setDefault(): Unit {
+        setPGA(ADS1X15_PGA_DEFAULT)
+        setDatarate(ADS1X15_DR_DEFAULT)
     }
 
     fun isBusy(): Boolean = !isReady()

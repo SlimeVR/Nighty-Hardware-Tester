@@ -8,18 +8,23 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpRequest.BodyPublishers
+import java.net.http.HttpResponse
 import java.net.http.HttpResponse.BodyHandlers
+import java.net.http.HttpTimeoutException
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util.Date
+import java.util.logging.Logger
 
 class RemoteTestingDatabase(
     val rpc_url: String,
     val rpc_password: String,
     val testerName: String,
-    val testType: String
+    val testType: String,
+    val globalLogger: Logger
 ) : TestingDatabase {
 
+    val HTTP_RETRIES = 3
     var dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
     val httpClient = HttpClient.newHttpClient()
@@ -35,8 +40,20 @@ class RemoteTestingDatabase(
         val body = ApiRequestBody("insert_test_report", toReport(device))
         val json = writer.writeValueAsString(body)
         val request = httpRequestBuilder.POST(BodyPublishers.ofString(json)).build()
-        val response = httpClient.send(request, BodyHandlers.ofString())
-        return "${response.statusCode()}: ${response.body()}"
+        var response: HttpResponse<String>? = null
+        for(i in 1..HTTP_RETRIES) {
+            try {
+                response = httpClient.send(request, BodyHandlers.ofString())
+                break
+            } catch(ex: HttpTimeoutException) {
+                if(i < HTTP_RETRIES) {
+                    globalLogger.warning("HTTP Timeout: ${ex.message}. Retry... $i")
+                    continue
+                }
+                throw ex
+            }
+        }
+        return "${response!!.statusCode()}: ${response.body()}"
     }
 
     private fun toReport(device: DeviceTest) = TestReport(

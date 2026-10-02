@@ -52,7 +52,8 @@ fun main(args: Array<String>) {
             System.getenv("TESTER_RPC_URL"),
             System.getenv("TESTER_RPC_PASSWORD"),
             System.getenv("TESTER_NAME") ?: "slime-tester-1",
-            System.getenv("TESTER_REPORT_TYPE")
+            System.getenv("TESTER_REPORT_TYPE"),
+            globalLogger
         )
     }
 
