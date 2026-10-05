@@ -43,6 +43,7 @@ class SlimyLabel : AbstractComponent<SlimyLabel> {
         const val COLOR_INFO_PREFIX = "\u001BI,"
         const val COLOR_CONFIG_PREFIX = "\u001BC,"
         const val COLOR_FINE_PREFIX = "\u001BF,"
+        val DEFAULT_FOREGROUND_COLOR = TextColor.ANSI.WHITE_BRIGHT
     }
 
     private var cachedLines = mutableListOf<String>()
@@ -203,17 +204,17 @@ class SlimyLabel : AbstractComponent<SlimyLabel> {
                 for (row in start until start + lines) {
                     var line = cachedLines[row]
                     if(line.startsWith(ESCAPE_PREFIX)) {
-                        graphics.setForegroundColor( when(line.substring(0, ESCAPE_PREFIX_SIZE)) {
+                        graphics.foregroundColor = when(line.substring(0, ESCAPE_PREFIX_SIZE)) {
                             COLOR_ERROR_PREFIX -> TextColor.ANSI.RED
                             COLOR_WARNING_PREFIX -> TextColor.ANSI.YELLOW
                             COLOR_INFO_PREFIX -> TextColor.ANSI.CYAN
                             COLOR_CONFIG_PREFIX -> TextColor.ANSI.GREEN
                             COLOR_FINE_PREFIX -> TextColor.ANSI.BLACK_BRIGHT
-                            else -> foregroundColor
-                        })
+                            else -> DEFAULT_FOREGROUND_COLOR
+                        }
                         line = line.substring(ESCAPE_PREFIX_SIZE)
                     } else {
-                        //graphics.setForegroundColor(foregroundColor)
+                        graphics.foregroundColor = foregroundColor ?: DEFAULT_FOREGROUND_COLOR
                     }
                     val fitString = TerminalTextUtils.fitString(line, availableColumns)
                     graphics.putString(0, row - start, fitString)

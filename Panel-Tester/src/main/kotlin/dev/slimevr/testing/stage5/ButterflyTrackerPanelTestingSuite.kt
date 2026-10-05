@@ -48,7 +48,7 @@ class ButterflyTrackerPanelTestingSuite(
 
     private val powerBalanceTimeMS = 100L
     private val serialEnumTimeMS = 2000L
-    private val serialOpenTimeMS = 200L
+    private val serialOpenTimeMS = 500L
     private val SERIAL_RETRIES = 3
     private val PING_RETRIES = 5
     private val SLEEP_RETRIES = 3
@@ -126,6 +126,8 @@ class ButterflyTrackerPanelTestingSuite(
         while (true) {
             try {
                 waitTestStart()
+                if (!lookupSelfUsbDevices())
+                    continue
                 testStart()
             } catch (ex: Throwable) {
                 logger.log(Level.SEVERE, "Standby error, can't continue", ex)
@@ -148,6 +150,9 @@ class ButterflyTrackerPanelTestingSuite(
                 flashDevices()
                 if(testEraseFlash) {
                     testEnd(TestStatus.NOT_UPDATED)
+                    synchronized(this) {
+                        isTesting = false
+                    }
                     // Do not test, do not commit
                     continue
                 }
@@ -308,7 +313,10 @@ class ButterflyTrackerPanelTestingSuite(
     val infoResultSuccess = arrayOf("Channel frequency:.*".toRegex())
     val infoResultFail = arrayOf("Unknown command".toRegex())
 
-    private fun searchForSelfUsbDevices() {
+    private fun lookupSelfUsbDevices(): Boolean {
+        probeSerials[0] = "unknown"
+        probeSerials[1] = "unknown"
+        dongle.serialPort = null
         SerialPort.getCommPorts().filter { p ->
             p.systemPortPath.startsWith("/dev/ttyACM")
         }.forEach { p ->
@@ -324,15 +332,18 @@ class ButterflyTrackerPanelTestingSuite(
                     probeSerials[probeIdx] = p.serialNumber
             }
         }
-
         val probesOk: Boolean = (probeSerials.count{ s -> s.contentEquals("unknown") } == 0)
         val dongleOk = (dongle.serialPort != null)
         logger.log(
             if (probesOk && dongleOk) Level.CONFIG else Level.SEVERE,
                 "Butterfly Dongle usb@${dongle.serialPort?.portLocation ?: "unknown"}" +
                     ", SWD probes serial: ${probeSerials[0]}, ${probeSerials[1]}"
-        )
-        if (!probesOk || !dongleOk)
+            )
+        return probesOk && dongleOk
+    }
+
+    private fun searchForSelfUsbDevices() {
+        if (!lookupSelfUsbDevices())
             throw UnexpectedException("Tester USB devices enumeration failed")
 
         if (serialManager.openPort(dongle.serialPort!!, dongle)) {
@@ -647,9 +658,6 @@ class ButterflyTrackerPanelTestingSuite(
             testDevices(i)
             clearSerial()
         }
-        switchboard.disableAll()
-        // Cycle the power to properly handle device change on usb ports
-        sleep(powerBalanceTimeMS)
         for(i in 1..SERIAL_RETRIES) {
             switchboard.disableAll()
             sleep(powerBalanceTimeMS)
@@ -851,16 +859,16 @@ class ButterflyTrackerPanelTestingSuite(
     fun getDeviceInfo(device: DeviceTest, retry: Int) {
         statusLogger.info("[${device.deviceNum + 1}] Testing...")
         // Wait for the command output and disconnect
-        val getInfoResult = SerialMatchingAction("Read device info", infoResultSuccess, infoResultFail, device, 2000)
+        val getInfoResult = SerialMatchingAction("Check device info", infoResultSuccess, infoResultFail, device, 2000)
         val startTime = System.currentTimeMillis()
         val infoResult = getInfoResult.action("", "", startTime)
         addResult(device, infoResult)
         if (infoResult.status == TestStatus.PASS) {
             // Data lookup
             //logger.warning(log)
-            val buildMatch = infoResult.matchLog("Commit: ([a-zA-Z0-9]+)")
+            val buildMatch = infoResult.matchLog("Commit: ([a-zA-Z0-9-.]+)")
             val buildHash = buildMatch?.get(1) ?: ""
-            val buildHashOk = buildHash.startsWith(FIRMWARE_HASH)
+            val buildHashOk = buildHash.contains(FIRMWARE_HASH)
             val buildResult = actionFirmwareVersion.action(buildHashOk, buildMatch?.get(0) ?: "Build commit hash not found", startTime)
             if(buildHashOk)
                 device.flashingRequired = false
@@ -907,7 +915,7 @@ class ButterflyTrackerPanelTestingSuite(
         retryPing@ for(i in 1..PING_RETRIES) {
             val startTime = System.currentTimeMillis()
             if (device.sendSerialCommand("ping ${dongle.deviceId} $radioChannel")) {
-                val waitPongResult = SerialMatchingAction("Read pong info", pongResultSuccess, pongResultFail, device, 500)
+                val waitPongResult = SerialMatchingAction("Test Radio", pongResultSuccess, pongResultFail, device, 500)
                 val pongResult = waitPongResult.action("", "", startTime)
                 if(device.serialDisconnected) {
                     if(retry < SERIAL_RETRIES) {
