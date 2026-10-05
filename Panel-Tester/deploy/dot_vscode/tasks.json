@@ -1,0 +1,171 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "shadowJar",
+            "type": "shell",
+            "command": "${workspaceFolder}/gradlew",
+            "windows": {
+                "command": "${workspaceFolder}/gradlew.bat"
+            },
+            "args": ["shadowJar"],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "buildJar",
+            "type": "shell",
+            "command": "${workspaceFolder}/gradlew",
+            "windows": {
+                "command": "${workspaceFolder}/gradlew.bat"
+            },
+            "args": [
+                "jar"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "copyJar",
+            "type": "shell",
+            "command": "scp ${workspaceFolder}\\build\\libs\\Panel-Tester-1.0-SNAPSHOT.jar rpi4@rpi4:~/panel_tester/",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "dependsOn": "buildJar"
+        },
+        {
+            "label": "debugJar",
+            "type": "shell",
+            "command": "ssh rpi4@rpi4 -t 'sh ~/panel_tester/debug.sh'",
+            "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                {
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "location": 2,
+                            "message": 3
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": ".",
+                        "endsPattern": ".",
+                    }
+                }
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "dependsOn": "copyJar"
+        },
+        {
+            "label": "runJar",
+            "type": "shell",
+            "command": "ssh rpi4@rpi4 -t 'sh ~/panel_tester/run.sh'",
+            "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                {
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "location": 2,
+                            "message": 3
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": ".",
+                        "endsPattern": ".",
+                    }
+                }
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "dependsOn": "copyJar"
+        },
+        {
+            "label": "sshTunnel",
+            "type": "shell",
+            "command": "ssh -L 5005:localhost:5005 rpi4@rpi4",
+            "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                {
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "location": 2,
+                            "message": 3
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": ".",
+                        "endsPattern": ".",
+                    }
+                }
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "debugJarRemote",
+            "dependsOn": [
+                "sshTunnel",
+                "buildJar",
+                "copyJar",
+                "debugJar",
+            ]
+        },
+        {
+            "label": "runJarRemote",
+            "dependsOn": [
+                "buildJar",
+                "copyJar",
+                "runJar",
+            ]
+        },
+        {
+            "label": "buildToRemote",
+            "dependsOn": [
+                "buildJar",
+                "copyJar"
+            ]
+        }
+    ]
+}

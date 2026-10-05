@@ -1,0 +1,73 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "kotlin",
+            "request": "launch",
+            "name": "Kotlin: Launch and Debug",
+            "preLaunchTask": "buildJar",
+            "command": "java -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005 -jar ${workspaceFolder}/build/libs/Panel-Tester-1.0-SNAPSHOT.jar",
+            "port": 5005,
+            "preLaunchWait": 5000,
+            "cwd": "${workspaceFolder}/bin",
+            "sourcePaths": [
+                "${workspaceFolder}/src/main/kotlin"
+            ]
+        },
+        {
+            "type": "kotlin",
+            "request": "launch",
+            "name": "Debug Gradle App",
+            "command": "./gradlew run -Dorg.gradle.jvmargs=\"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005\"",
+            "port": 5005,
+            "cwd": "${workspaceFolder}",
+            "sourcePaths": [
+                "${workspaceFolder}/src/main/kotlin"
+            ]
+        },
+        {
+            "type": "kotlin",
+            "request": "attach",
+            "name": "Kotlin: Attach to JVM",
+            "host": "localhost",
+            "port": 5005,
+            "sourcePaths": [
+                "${workspaceFolder}/src/main/kotlin"
+            ]
+        },
+        {
+            "type": "kotlin",
+            "request": "launch",
+            "name": "Kotlin: Remote Launch",
+            "preLaunchTask": "runJarRemote",
+            "command": "echo 'Remote Launch'",
+            "preLaunchWait": 20000,
+            "port": 5005,
+            "cwd": "${workspaceFolder}",
+            "sourcePaths": [
+                "${workspaceFolder}/src/main/kotlin"
+            ]
+        },
+        {
+            "type": "kotlin",
+            "request": "attach",
+            "name": "Kotlin: Remote Launch and Debug",
+            "preLaunchTask": "debugJarRemote",
+            "host": "localhost",
+            "port": 5005,
+            "sourcePaths": [
+                "${workspaceFolder}/src/main/kotlin"
+            ]
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Kotlin: Upload to Remote",
+            "preLaunchTask": "buildToRemote",
+            "command": "exit"
+        },
+    ]
+}
