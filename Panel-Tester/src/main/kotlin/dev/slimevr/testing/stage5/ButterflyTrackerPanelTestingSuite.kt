@@ -915,7 +915,7 @@ class ButterflyTrackerPanelTestingSuite(
         retryPing@ for(i in 1..PING_RETRIES) {
             val startTime = System.currentTimeMillis()
             if (device.sendSerialCommand("ping ${dongle.deviceId} $radioChannel")) {
-                val waitPongResult = SerialMatchingAction("Test Radio", pongResultSuccess, pongResultFail, device, 500)
+                val waitPongResult = SerialMatchingAction("Ping dongle", pongResultSuccess, pongResultFail, device, 500)
                 val pongResult = waitPongResult.action("", "", startTime)
                 if(device.serialDisconnected) {
                     if(retry < SERIAL_RETRIES) {
@@ -923,6 +923,7 @@ class ButterflyTrackerPanelTestingSuite(
                         device.deviceId = "" // Force to enumerate
                         return // to external retry loop
                     }
+                    addResult(device, pongResult)
                 }
                 if(pongResult.endValue.lowercase().startsWith("timeout")) {
                     // Dongle can miss ping packet, so it is OK to retry again
@@ -931,8 +932,9 @@ class ButterflyTrackerPanelTestingSuite(
                         showStatus(device, TestStatus.PORT_ERROR)
                         continue@retryPing
                     }
+                    addResult(device, pongResult)
                 }
-                if(pongResult.status != TestStatus.PASS) {
+                if(pongResult.status == TestStatus.PASS) {
                     val match = pongResult.matchLog("PONG packet received from ([a-zA-Z0-9:]+), RSSI ([0-9]+)")
                     val pongAddress = match?.get(1) ?: ""
                     val pongRssi = match?.get(2)?.toInt() ?: 255
