@@ -25,6 +25,9 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    maven(url = "https://slimevr.github.io/maven") {
+        content { includeGroup("com.fazecast") }
+    }
 }
 
 dependencies {
@@ -37,7 +40,9 @@ dependencies {
     implementation("com.pi4j:pi4j-plugin-pigpio:2.3.0")
     implementation("com.pi4j:pi4j-plugin-linuxfs:2.3.0")
     implementation("com.googlecode.lanterna:lanterna:3.1.1")
-    implementation("com.fazecast:jSerialComm:[2.0.0,3.0.0)")
+    implementation("com.fazecast:jSerialComm:2.12.0-slimevr.1") {
+        exclude(group = "com.fazecast", module = "android")
+    }
 
     implementation("com.fasterxml.jackson.core:jackson-databind:2.12.7.1")
 }
