@@ -703,6 +703,20 @@ class ButterflyTrackerPanelTestingSuite(
             // Cycle the power on retry
             switchboard.device(ALL, OFF)
             sleep(serialEnumTimeMS / 2)
+            /*for (device in deviceTests) {
+                if (switchboard.deviceNumToChannel(device.deviceNum) != switchboard.channel())
+                    continue
+                if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
+                    continue
+                if(device.deviceId.isEmpty()) {
+                    val ch = switchboard.mapDeviceToSwitchboard(device.deviceNum)
+                    switchboard.device(ch, ON)
+                    switchboard.pinReset(true)
+                    sleep(powerBalanceTimeMS / 2)
+                    switchboard.pinReset(false)
+                    switchboard.device(ch, OFF)
+                }
+            }*/
         }
         var portsCount = 0
         for (device in deviceTests) {
