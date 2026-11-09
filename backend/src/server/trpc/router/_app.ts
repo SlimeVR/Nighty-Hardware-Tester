@@ -26,7 +26,10 @@ export const appRouter = router({
             endedAt: "desc",
           },
           where: {
-            id: input.id === null ? undefined : { search: input.id },
+            id:
+              input.id === null
+                ? undefined
+                : { contains: input.id, mode: "insensitive" },
             OR: input.onlyFailedReports
               ? [
                   { state: State.Failed },
