@@ -11,9 +11,8 @@ import java.net.http.HttpRequest.BodyPublishers
 import java.net.http.HttpResponse
 import java.net.http.HttpResponse.BodyHandlers
 import java.net.http.HttpTimeoutException
-import java.text.SimpleDateFormat
 import java.time.Duration
-import java.util.Date
+import java.time.Instant
 import java.util.logging.Logger
 
 class RemoteTestingDatabase(
@@ -25,7 +24,6 @@ class RemoteTestingDatabase(
 ) : TestingDatabase {
 
     val HTTP_RETRIES = 3
-    var dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
     val httpClient = HttpClient.newHttpClient()
     val httpRequestBuilder = HttpRequest.newBuilder(URI.create(rpc_url))
@@ -62,19 +60,19 @@ class RemoteTestingDatabase(
         toTestValues(device),
         testerName,
         if (device.testStatus == TestStatus.PASS) "succeeded" else "failed",
-        dateFormat.format(Date(device.startTime)),
-        dateFormat.format(Date(device.endTime))
+        Instant.ofEpochMilli(device.startTime).toString(),
+        Instant.ofEpochMilli(device.endTime).toString()
     )
 
     private fun toTestValues(device: DeviceTest) = device.testsList.map {
         TestReportValue(
             it.testName,
             it.testName,
-            it.endValue,
+            it.endValue.ifEmpty { "<empty>" },
             it.log,
             it.status != TestStatus.PASS,
-            dateFormat.format(Date(it.timeStart)),
-            dateFormat.format(Date(it.timeEnd))
+            Instant.ofEpochMilli(it.timeStart).toString(),
+            Instant.ofEpochMilli(it.timeEnd).toString()
         )
     }
 

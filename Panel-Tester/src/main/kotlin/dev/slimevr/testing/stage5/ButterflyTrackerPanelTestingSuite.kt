@@ -193,6 +193,7 @@ class ButterflyTrackerPanelTestingSuite(
         testOnlyDevices = setOf(*devices.toTypedArray())
         testOnlyDevicesReflash = reflash
         testEraseFlash = eraseFlash
+        testRepeat = devices.isNotEmpty()
         startTest = true
     }
 
@@ -253,7 +254,7 @@ class ButterflyTrackerPanelTestingSuite(
     }
 
     private fun testSelfVoltages() {
-        selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_6_144V)
+        selectAdcGain(ADS1X15_PGA_6_144V)
         switchboard.disableAll()
         sleep(powerBalanceTimeMS)
         if (switchboard.isChannelPresent()) {
@@ -321,7 +322,7 @@ class ButterflyTrackerPanelTestingSuite(
             p.systemPortPath.startsWith("/dev/ttyACM")
         }.forEach { p ->
             val name = p.descriptivePortName.lowercase()
-            if (name.contains("slimenrf receiver")) {
+            if (name.contains("slimenrf receiver") || name.contains("slimevr butterfly dongle")) {
                 dongle.serialPort = p
             } else if (name.contains("multiprobe")) {
                 hubLocationPrefix = p.portLocation.dropLast(1)
@@ -512,11 +513,11 @@ class ButterflyTrackerPanelTestingSuite(
                     if (batPg) "VBAT_PG: Over-current detected" else "Power OK", batPgStartTime
                 )
 
-                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V)
+                selectAdcGain(ADS1X15_PGA_4_096V)
                 val vBatResult = actionVBatRef.action(getBatVoltage(), "", System.currentTimeMillis())
                 val vOutFromBatResult = actionVoutBat.action(getOutVoltage(), "", System.currentTimeMillis())
                 val vBusFromBatResult = actionBusFromBat.action(getBusVoltage(), "", System.currentTimeMillis())
-                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V) // 4V = 40mA max
+                selectAdcGain(ADS1X15_PGA_4_096V) // 4V = 40mA max
                 val vIoutResult = actionIoutBlank.action(getBatCurrent(), "", System.currentTimeMillis()) // ~0.3-10mA
                 addResult(device, batPgResult)
                 addResult(device, vBatResult)
@@ -534,11 +535,11 @@ class ButterflyTrackerPanelTestingSuite(
                     !busPg,
                     if (busPg) "VBUS_PG: Over-current detected" else "Power OK", busPgStartTime
                 )
-                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_6_144V)
+                selectAdcGain(ADS1X15_PGA_6_144V)
                 val vOutFromUsbResult = actionVoutUsb.action(getOutVoltage(), "", System.currentTimeMillis()) // ~5V
-                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V)
+                selectAdcGain(ADS1X15_PGA_4_096V)
                 val vBusFromUsbResult = actionBusFromUsb.action(getBusVoltage(), "", System.currentTimeMillis()) // ~3V
-                selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_DEFAULT)
+                selectAdcGain(ADS1X15_PGA_DEFAULT)
                 addResult(device, busPgResult)
                 addResult(device, vOutFromUsbResult)
                 addResult(device, vBusFromUsbResult)
@@ -550,6 +551,21 @@ class ButterflyTrackerPanelTestingSuite(
     }
 
     private val DEBUG_FLASHING_ERRORS = false
+
+    private val openocdLogFilter = { log: MutableList<String> ->
+        val startIndex = log.indexOfFirst { it.startsWith("Open On-Chip Debugger", ignoreCase = true) }
+        if(startIndex != -1) {
+            log.removeAt(startIndex)
+            if(log.size > startIndex && log[startIndex].startsWith("Licensed under", ignoreCase = true))
+                log.removeAt(startIndex)
+            if(log.size > startIndex + 1 && log[startIndex].startsWith("For bug reports", ignoreCase = true)) {
+                log.removeAt(startIndex)
+                log.removeAt(startIndex)
+            }
+            if(log.size > startIndex && log[startIndex].startsWith("debug_level", ignoreCase = true))
+                log.removeAt(startIndex)
+        }
+    }
 
     private fun flashDevices() {
         if(FLASH_DEVICES) {
@@ -609,7 +625,8 @@ class ButterflyTrackerPanelTestingSuite(
                         "Flash firmware",
                         successStrings, failStrings,
                         "sh flash.sh ${swd.config} $itf $imageFile $gdbPort",
-                        timeout
+                        timeout,
+                        logFilter = openocdLogFilter
                     )
                     val flashResult = flashAction.action("", "", startTime)
 
@@ -1087,9 +1104,9 @@ class ButterflyTrackerPanelTestingSuite(
                     //sleep(speepBootTimeMS) // XXX
                     deviceTests[i].testStatus = TestStatus.TESTING
 
-                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_0_256V)
-                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_6_144V)
-                    selectAdcRate(dev.slimevr.hardware.ads1x15.ADS1X15_DR_8SPS)
+                    selectAdcGain(ADS1X15_PGA_0_256V)
+                    selectAdcGain(ADS1X15_PGA_6_144V)
+                    selectAdcRate(ADS1X15_DR_8SPS)
                     while(!switchboard.isButtonPressed()) {
                        val current = getBatCurrent().toString()
                        val batPg = switchboard.isPowerFaultTriggered()
@@ -1097,7 +1114,7 @@ class ButterflyTrackerPanelTestingSuite(
                        logger.info("${current}${pgStr}")
                        sleep(100)
                     }
-                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_DEFAULT)
+                    selectAdcGain(ADS1X15_PGA_DEFAULT)
 
                     val batPgStartTime = System.currentTimeMillis()
                     val batPg = switchboard.isPowerFaultTriggered()
@@ -1105,11 +1122,11 @@ class ButterflyTrackerPanelTestingSuite(
                         !batPg,
                         if (batPg) "VBAT_PG: Over-current detected" else "Power OK", batPgStartTime
                     )
-                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_4_096V)
+                    selectAdcGain(ADS1X15_PGA_4_096V)
                     val vBatResult = actionVBatRef.action(getBatVoltage(), "", System.currentTimeMillis())
                     val vOutFromBatResult = actionVoutBat.action(getOutVoltage(), "", System.currentTimeMillis())
                     val vBusFromBatResult = actionBusFromBat.action(getBusVoltage(), "", System.currentTimeMillis())
-                    selectAdcGain(dev.slimevr.hardware.ads1x15.ADS1X15_PGA_0_256V)
+                    selectAdcGain(ADS1X15_PGA_0_256V)
                     val vIoutResult = actionIoutSleep.action(getBatCurrent(), "", System.currentTimeMillis())
                     addResult(device, batPgResult)
                     addResult(device, vBatResult)

@@ -36,10 +36,18 @@ Useful commands:
 	cd panel_tester/
 	sh run.sh
 	
-7. Upload Full image to `~/panel_tester`.
+7. Upload Full image of Tracker FW to `~/panel_tester`.
 7.1. Check the commit hash of the app image build.
 It can be lookup by Serial command `info` from the flashed tracker.
-7.2. Full image can be combined by mergehex (`C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\mergehex.exe` on Windows).
+Reply example:
+	SlimeVR Butterfly Tracker
+	SlimeVR-Tracker-nRF 0.0.1-tdma+1
+	Commit: 0.0.1-1-g056219c2f686
+	Build: 2026-10-05 11:16:12
+	
+Here is APP_BUILD_VERSION as Commit string: "0.0.1" is a tag, "-1" appends for the number of commits on top of the tag, and "056219c2f686" is a git hash.
+	
+7.2. FW full image can be combined by mergehex (`C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\mergehex.exe` on Windows).
 You will need bootloader.hex and skip_image_crc_nrf52833.hex to combine with the app firmware hex.
 Merge bootloader with app image and skip image CRC fix:
 	mergehex.exe -m bootloader.hex zephyr.hex skip_image_crc_nrf52833.hex -o zephyr_full.hex
@@ -54,6 +62,29 @@ Merge bootloader with app image and skip image CRC fix:
 	TESTER_FIRMWARE_COMMIT - substring of an app build version including the commit hash (APP_BUILD_VERSION)
 
 IMPORTANT: All shell scripts should be with Unix style EOL
+
+9. Setup onboard Pico 2 probes for SWD programming.
+9.1. Flash multiptobe FW through UF2 bootloader.
+DFU mode be activated by pluggin the power while holding the button.
+After the flashing Composite USB device should present 10 CMSIS-DAP interfaces.
+9.2. Configure multiprobes in `openocd1.cfg` and `openocd2.cfg` with USB Serial numbers.
+Hint: Serials are logged on run.sh startup (in the order)
+	
+10. Setup Testing Dongle.
+10.1. Flash bootloader and Dongle FW (tag 0.0.1)
+Add fake devices into paired list to prevent trackers under the test to autopair.
+via Serial commands:
+	add 000000000001
+	add 000000000002
+	add 000000000003
+	add 000000000004
+	add 000000000005
+	add 000000000006
+	add 000000000007
+	add 000000000008
+	add 000000000009
+	add 00000000000A
+10.2. Plug the Dongle into USB 2.0 port of RPi
 	
 === Development and debugging ===
 

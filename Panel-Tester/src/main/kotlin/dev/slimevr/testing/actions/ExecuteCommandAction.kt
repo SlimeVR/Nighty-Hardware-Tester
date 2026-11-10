@@ -24,7 +24,8 @@ class ExecuteCommandAction(
     command: String,
     private val timeout: Long,
     directory: File? = null,
-    private val logger: Logger? = null
+    private val logger: Logger? = null,
+    private val logFilter: ((MutableList<String>) -> Unit)? = null
 ) : MatchingAction(testName, successPatterns, failurePatterns) {
 
     private val argRegex = Pattern.compile("\"([^\"]*)\"|'([^']*)'|(\\S+)")
@@ -117,6 +118,7 @@ class ExecuteCommandAction(
             else
                 TestStatus.ERROR
         }
+        logFilter?.invoke(fullLog)
         return TestResult(
             testName,
             testResult,
