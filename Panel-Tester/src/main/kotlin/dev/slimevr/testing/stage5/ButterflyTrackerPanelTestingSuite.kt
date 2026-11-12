@@ -376,6 +376,7 @@ class ButterflyTrackerPanelTestingSuite(
             }
         } else {
             serialManager.closePort(dongle.serialPort!!)
+            // TODO: Implement retry
             throw UnexpectedException("USB connection with Dongle failed")
         }
     }
@@ -890,7 +891,7 @@ class ButterflyTrackerPanelTestingSuite(
     fun getDeviceInfo(device: DeviceTest, retry: Int) {
         statusLogger.info("[${device.deviceNum + 1}] Testing...")
         // Wait for the command output and disconnect
-        val getInfoResult = SerialMatchingAction("Check device info", infoResultSuccess, infoResultFail, device, 2000)
+        val getInfoResult = SerialMatchingAction("Check device info", infoResultSuccess, infoResultFail, device, 2000) // TODO: Minimize logs (trim lines before the command)
         val startTime = System.currentTimeMillis()
         val infoResult = getInfoResult.action("", "", startTime)
         addResult(device, infoResult)

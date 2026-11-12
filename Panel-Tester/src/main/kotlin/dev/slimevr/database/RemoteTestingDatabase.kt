@@ -37,7 +37,7 @@ class RemoteTestingDatabase(
         val writer = ObjectMapper().writer().with(SerializationFeature.INDENT_OUTPUT)
         val body = ApiRequestBody("insert_test_report", toReport(device))
         val json = writer.writeValueAsString(body)
-        val request = httpRequestBuilder.POST(BodyPublishers.ofString(json)).build()
+        val request = httpRequestBuilder.POST(BodyPublishers.ofString(json)).timeout(Duration.ofSeconds(10)).build()
         var response: HttpResponse<String>? = null
         for(i in 1..HTTP_RETRIES) {
             try {
