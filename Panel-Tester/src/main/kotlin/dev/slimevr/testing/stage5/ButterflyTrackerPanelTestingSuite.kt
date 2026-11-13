@@ -12,7 +12,7 @@ import dev.slimevr.hardware.serial.SerialManager
 import dev.slimevr.hardware.swd.ProgrammerService
 import dev.slimevr.hardware.usb.USBDmesgWatcher
 import dev.slimevr.hardware.usb.USBNotify
-import dev.slimevr.hardware.ads1x15.*
+import dev.slimevr.hardware.i2c.*
 import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.*
 import dev.slimevr.testing.actions.ExecuteCommandAction

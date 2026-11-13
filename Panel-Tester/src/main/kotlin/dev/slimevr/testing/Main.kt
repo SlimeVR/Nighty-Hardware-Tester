@@ -6,9 +6,11 @@ import com.pi4j.Pi4J
 import com.pi4j.context.Context
 import com.pi4j.io.i2c.I2CConfigBuilder
 import com.pi4j.io.i2c.I2CProvider
+import com.pi4j.io.spi.SpiProvider
 import dev.slimevr.database.RemoteTestingDatabase
 import dev.slimevr.hardware.Switchboard
 import dev.slimevr.hardware.SwitchboardStage5
+import dev.slimevr.hardware.SwitchboardStage6
 import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.stage1.MainPanelTestingSuite
 import dev.slimevr.testing.stage2.Stage2TestingSuite
@@ -16,6 +18,7 @@ import dev.slimevr.testing.stage3.Stage3Updater
 import dev.slimevr.testing.stage4.ExtensionsPanelTestingSuite
 import dev.slimevr.testing.stage5.ButterflyTrackerPanelTestingSuite
 import dev.slimevr.testing.stage5.CalibrateADC
+import dev.slimevr.testing.stage6.TestDongleTester
 import dev.slimevr.ui.stage1.TesterUI
 import dev.slimevr.ui.stage2.Stage2UI
 import dev.slimevr.ui.stage3.Stage3UpdaterUI
@@ -104,6 +107,16 @@ fun main(args: Array<String>) {
         val board = SwitchboardStage5(pi4j!!)
         val cal = CalibrateADC(adc, board, LogManager.global)
         cal.calibrate()
+        destroy()
+    } else if (stage == 6) {
+        pi4j = Pi4J.newAutoContext()
+        val i2CProvider: I2CProvider = pi4j!!.provider("pigpio-i2c")
+        val spiProvider: SpiProvider = pi4j!!.provider("pigpio-spi")
+        val switchboard = SwitchboardStage6(pi4j!!)
+        val adcProvider = ADCProvider(i2CProvider, spiProvider)
+        val suite =
+            TestDongleTester(switchboard, adcProvider, LogManager.global)
+        suite.start()
         destroy()
     } else {
         pi4j = Pi4J.newAutoContext()

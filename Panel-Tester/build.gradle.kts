@@ -38,6 +38,8 @@ dependencies {
     implementation("com.pi4j:pi4j-core:2.3.0")
     implementation("com.pi4j:pi4j-plugin-raspberrypi:2.3.0")
     implementation("com.pi4j:pi4j-plugin-pigpio:2.3.0")
+    implementation("com.pi4j:pi4j-gpio-extension:1.2")
+    implementation("com.pi4j:pi4j-device:1.2")
     implementation("com.pi4j:pi4j-plugin-linuxfs:2.3.0")
     implementation("com.googlecode.lanterna:lanterna:3.1.1")
     implementation("com.fazecast:jSerialComm:2.12.0-slimevr.1") {

@@ -1,4 +1,4 @@
-package dev.slimevr.hardware.ads1x15
+package dev.slimevr.hardware.i2c
 
 import com.pi4j.io.i2c.I2C
 import com.pi4j.io.i2c.I2CRegister
