@@ -43,24 +43,30 @@ class TestDongleTester(
         var f = gpio.readPort() and faultMask
         println("${device}=$v FAULT=$f")
 
-        Thread.sleep(1000)
-        print("USB 5V: ")
+        Thread.sleep(3000)
+        println("USB 5V: ")
         gpio.writePort(portMaskUsb)
-        Thread.sleep(100)
+        for(i in 1..10) {
+            Thread.sleep(10)
+            v = measure(adcIC, adcCH)
+            f = gpio.readPort() and faultMask
+            println("  ${device}=$v FAULT=$f")
+        }
+        /*Thread.sleep(100)
         v = measure(adcIC, adcCH)
         f = gpio.readPort() and faultMask
-        println("${device}=$v FAULT=$f")
+        println("${device}=$v FAULT=$f")*/
 
-        Thread.sleep(1000)
-        print("BUS 3V: ")
-        gpio.writePort(portMask3V)
-        Thread.sleep(100)
+        // Thread.sleep(1000)
+        // print("BUS 3V: ")
+        // gpio.writePort(portMask3V)
+        // Thread.sleep(100)
 
-        v = measure(adcIC, adcCH)
-        f = gpio.readPort() and faultMask
-        println("${device}=$v FAULT=$f")
+        // v = measure(adcIC, adcCH)
+        // f = gpio.readPort() and faultMask
+        // println("${device}=$v FAULT=$f")
 
-        Thread.sleep(1000)
+        //Thread.sleep(1000)
 
         print("END OFF: ")
         gpio.writePort(portMaskOff)
@@ -87,7 +93,7 @@ class TestDongleTester(
 
     fun measure(adc: MCP3008, channel: Int): Float {
         val raw = adc.readChannel(channel)
-        val ratio = 3.3f / 1024f
+        val ratio = 2f * 3.3f / 1024f // Vcc = 3.3V, 10bit full range, 1/2 divider
         return raw * ratio
     }
 
@@ -205,6 +211,28 @@ class TestDongleTester(
                 GpioPinMode.FAULT -> A0
             }
             else -> throw IllegalArgumentException("Invalid index {$device}")
+        }
+    }
+
+    fun mapDeviceToSwdDevice(num: Int): Int {
+        require(num in 0..20)
+        // SWD1: #1..10
+        // SWD2: #11..20
+        return when {
+            (num < 10) -> 0
+            (num < 20) -> 1
+            else -> -1
+        }
+    }
+
+    fun mapDeviceToSwdInterface(num: Int): Int {
+        require(num in 0..20)
+        // SWD1: #1..10
+        // SWD2: #11..20
+        return when {
+            (num < 10) -> num
+            (num < 20) -> num - 10
+            else -> -1
         }
     }
 }

@@ -20,6 +20,11 @@ class SwitchboardStage6(
         DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.HIGH).initial(DigitalState.HIGH).address(16).provider("pigpio-digital-output").build()
     )
 
+    private var swdRunPins = arrayOf(
+        DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.HIGH).initial(DigitalState.HIGH).address(7).provider("pigpio-digital-output").build(),
+        DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.HIGH).initial(DigitalState.HIGH).address(8).provider("pigpio-digital-output").build()
+    )
+
     private var intPins = arrayOf(
         pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.OFF).address(22).provider("pigpio-digital-input")),
         pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.OFF).address(24).provider("pigpio-digital-input")),
