@@ -5,9 +5,13 @@ import com.pi4j.io.gpio.digital.DigitalInput
 import com.pi4j.io.gpio.digital.DigitalOutput
 import com.pi4j.io.gpio.digital.DigitalState
 import com.pi4j.io.gpio.digital.PullResistance
+import com.pi4j.io.i2c.I2CConfigBuilder
+import com.pi4j.io.i2c.I2CProvider
+import dev.slimevr.hardware.i2c.*
 
 class Switchboard(
-    pi4j: Context
+    pi4j: Context,
+    i2CProvider: I2CProvider?
 ) {
 
     private var enablePullUp = true
@@ -51,6 +55,13 @@ class Switchboard(
     private var powerFaultPin =
         pi4j.create(DigitalInput.newConfigBuilder(pi4j).pull(PullResistance.PULL_UP).address(10)
             .provider("pigpio-digital-input"))
+
+    val ADS1X15_1: ADS1X15 by lazy {
+        ADS1X15(i2CProvider!!.create(I2CConfigBuilder.newInstance(pi4j).bus(1).device(ADS1115_ADDRESS_GND.toInt()).build()))
+    }
+    val ADS1X15_2: ADS1X15 by lazy {
+        ADS1X15(i2CProvider!!.create(I2CConfigBuilder.newInstance(pi4j).bus(1).device(ADS1115_ADDRESS_VCC.toInt()).build()))
+    }
 
     init {
         powerOff()

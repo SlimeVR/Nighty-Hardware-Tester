@@ -18,12 +18,13 @@ import dev.slimevr.testing.stage3.Stage3Updater
 import dev.slimevr.testing.stage4.ExtensionsPanelTestingSuite
 import dev.slimevr.testing.stage5.ButterflyTrackerPanelTestingSuite
 import dev.slimevr.testing.stage5.CalibrateADC
-import dev.slimevr.testing.stage6.TestDongleTester
+import dev.slimevr.testing.stage6.ButterflyDonglePanelTestingSuite
 import dev.slimevr.ui.stage1.TesterUI
 import dev.slimevr.ui.stage2.Stage2UI
 import dev.slimevr.ui.stage3.Stage3UpdaterUI
 import dev.slimevr.ui.stage4.ExtensionsUpdaterUI
 import dev.slimevr.ui.stage5.TesterButterflyTrackerUI
+import dev.slimevr.ui.stage6.TesterButterflyDongleUI
 import java.io.File
 import java.lang.Thread.sleep
 import java.util.logging.Level
@@ -93,41 +94,43 @@ fun main(args: Array<String>) {
     } else if (stage == 5) {
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("pigpio-i2c")
-        val switchboard = SwitchboardStage5(pi4j!!)
-        val adcProvider = ADCProvider(i2CProvider)
+        val switchboard = SwitchboardStage5(pi4j!!, i2CProvider)
         val testerUi = TesterButterflyTrackerUI(globalLogger, statusLogger)
         val suite =
-            ButterflyTrackerPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 20, globalLogger, statusLogger)
+            ButterflyTrackerPanelTestingSuite(switchboard, listOf(database), testerUi, 20, globalLogger, statusLogger)
         suite.start()
         testerUi.registerTestingSuite(suite)
     } else if(stage == 555) {
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("pigpio-i2c")
-        val adc = ADCProvider(i2CProvider)
-        val board = SwitchboardStage5(pi4j!!)
-        val cal = CalibrateADC(adc, board, LogManager.global)
+        val switchboard = SwitchboardStage5(pi4j!!, i2CProvider)
+        val cal = CalibrateADC(switchboard, LogManager.global)
         cal.calibrate()
         destroy()
     } else if (stage == 6) {
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("pigpio-i2c")
         val spiProvider: SpiProvider = pi4j!!.provider("pigpio-spi")
-        val switchboard = SwitchboardStage6(pi4j!!)
-        val adcProvider = ADCProvider(i2CProvider, spiProvider)
+        val switchboard = SwitchboardStage6(pi4j!!, i2CProvider, spiProvider)
+        val loggers = arrayOfNulls<Logger>(20)
+        for (i in 1..loggers.size)
+            loggers[i - 1] = Logger.getLogger("device-{$i}")
+        val deviceLoggers: Array<Logger> = loggers.map { it!! }.toTypedArray()
+        val uiGlobalLogger = Logger.getLogger("ui-log")
+        uiGlobalLogger.parent = globalLogger
+        val testerUi =
+            TesterButterflyDongleUI(uiGlobalLogger, deviceLoggers)
         val suite =
-            TestDongleTester(switchboard, adcProvider, LogManager.global)
+            ButterflyDonglePanelTestingSuite(switchboard, listOf(database), testerUi, deviceLoggers, uiGlobalLogger)
         suite.start()
-        destroy()
+        testerUi.registerTestingSuite(suite)
     } else {
         pi4j = Pi4J.newAutoContext()
         val i2CProvider: I2CProvider = pi4j!!.provider("linuxfs-i2c")
-        val switchboard = Switchboard(pi4j!!)
-        val adcProvider = ADCProvider(i2CProvider)
-
+        val switchboard = Switchboard(pi4j!!, i2CProvider)
         val testerUi = TesterUI(globalLogger, statusLogger)
-
         val suite =
-            MainPanelTestingSuite(switchboard, adcProvider, listOf(database), testerUi, 20, globalLogger, statusLogger)
+            MainPanelTestingSuite(switchboard, listOf(database), testerUi, 20, globalLogger, statusLogger)
         suite.start()
         testerUi.registerTestingSuite(suite)
     }

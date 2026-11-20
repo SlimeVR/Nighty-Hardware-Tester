@@ -17,7 +17,6 @@ import java.util.logging.Logger
 
 class MainPanelTestingSuite(
     private val switchboard: Switchboard,
-    private val adc: ADCProvider,
     private val testingDatabases: List<TestingDatabase>,
     private val testerUi: TesterUI,
     private val devices: Int,
@@ -328,12 +327,12 @@ class MainPanelTestingSuite(
         }
     }
 
-    private fun get3v3Voltage(): Float = adc.ADS1X15_1.getVoltage(0u)
-    private fun getVCCVoltage(): Float = adc.ADS1X15_1.getVoltage(1u)
-    private fun getVBUSVoltage(): Float = adc.ADS1X15_1.getVoltage(2u)
-    private fun getBatVoltage(): Float = adc.ADS1X15_1.getVoltage(3u)
-    private fun getChrgVoltage(): Float = 0f //adc.ADS1X15_2.getVoltage(0u)
-    private fun getFullVoltage(): Float = 0f //adc.ADS1X15_2.getVoltage(1u)
+    private fun get3v3Voltage(): Float = switchboard.ADS1X15_1.getVoltage(0u)
+    private fun getVCCVoltage(): Float = switchboard.ADS1X15_1.getVoltage(1u)
+    private fun getVBUSVoltage(): Float = switchboard.ADS1X15_1.getVoltage(2u)
+    private fun getBatVoltage(): Float = switchboard.ADS1X15_1.getVoltage(3u)
+    private fun getChrgVoltage(): Float = 0f //switchboard.ADS1X15_2.getVoltage(0u)
+    private fun getFullVoltage(): Float = 0f //switchboard.ADS1X15_2.getVoltage(1u)
 
     private fun selfTest() {
         switchboard.disableAll()

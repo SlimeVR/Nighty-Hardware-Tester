@@ -6,13 +6,11 @@ import com.pi4j.io.gpio.digital.DigitalOutput
 import com.pi4j.io.gpio.digital.DigitalState
 import com.pi4j.io.i2c.I2CProvider
 import dev.slimevr.hardware.SwitchboardStage5
-import dev.slimevr.testing.ADCProvider
 import dev.slimevr.testing.pi4j
 import dev.slimevr.testing.destroy
 import java.util.logging.Logger
 
 class CalibrateADC(
-        val adc: ADCProvider,
         val board: SwitchboardStage5,
         val logger: Logger
     ) {
@@ -29,16 +27,16 @@ class CalibrateADC(
      *
      * Scale 10mA / 1V
      */
-    private fun getIoutVoltage(): Float = adc.ADS1X15_1.getVoltage(0u)
+    private fun getIoutVoltage(): Float = board.ADS1X15_1.getVoltage(0u)
 
     /** VBat target test-point */
-    private fun getBatVoltage(): Float = adc.ADS1X15_1.getVoltage(1u)
+    private fun getBatVoltage(): Float = board.ADS1X15_1.getVoltage(1u)
 
     /** 3V targer test-point */
-    private fun getBusVoltage(): Float = adc.ADS1X15_1.getVoltage(2u)
+    private fun getBusVoltage(): Float = board.ADS1X15_1.getVoltage(2u)
 
     /** VDD targer test-point */
-    private fun getOutVoltage(): Float = adc.ADS1X15_1.getVoltage(3u)
+    private fun getOutVoltage(): Float = board.ADS1X15_1.getVoltage(3u)
 
     private val powerBalanceTimeMS = 50L
 

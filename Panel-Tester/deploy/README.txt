@@ -26,18 +26,27 @@ Useful commands:
 3. Install OpenOCD + Screen:
 	sudo apt-get install openocd screen
 	
-4. Use raspi-config to:
+4. Setup terminal font:
+	sudo nano /etc/default/console-setup
+	
+	Terminus 6x12 8x14 8x16
+	Fixed 8x13 8x14 8x16
+	
+5. Use raspi-config to:
 	Enable I2C, SPI, GPIO control
 	Enable Auto-login
+5.1. Reboot:
+	sudo reboot
 	
-5. Deploy shells, configs and gradle dependency jars to `~/panel_tester`
+6. Deploy shells, configs and gradle dependency jars to `~/panel_tester`
 	
-6. Configure autorun with `sudo nano ~/.bashrc`, append next lines:
+7. Configure autorun with `sudo nano ~/.bashrc`, append next lines:
 	cd panel_tester/
 	sh run.sh
 	
-7. Upload Full image of Tracker FW to `~/panel_tester`.
-7.1. Check the commit hash of the app image build.
+
+8. Upload Full image of Tracker FW to `~/panel_tester`.
+8.1. Check the commit hash of the app image build.
 It can be lookup by Serial command `info` from the flashed tracker.
 Reply example:
 	SlimeVR Butterfly Tracker
@@ -47,12 +56,12 @@ Reply example:
 	
 Here is APP_BUILD_VERSION as Commit string: "0.0.1" is a tag, "-1" appends for the number of commits on top of the tag, and "056219c2f686" is a git hash.
 	
-7.2. FW full image can be combined by mergehex (`C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\mergehex.exe` on Windows).
+8.2. FW full image can be combined by mergehex (`C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\mergehex.exe` on Windows).
 You will need bootloader.hex and skip_image_crc_nrf52833.hex to combine with the app firmware hex.
 Merge bootloader with app image and skip image CRC fix:
 	mergehex.exe -m bootloader.hex zephyr.hex skip_image_crc_nrf52833.hex -o zephyr_full.hex
 
-8. Configure run.sh (debug.sh)
+9. Configure run.sh (debug.sh)
 	TESTER_RPC_URL - API URL
 	TESTER_RPC_PASSWORD - API password
 	TESTER_REPORT_TYPE - DB report type
@@ -63,15 +72,15 @@ Merge bootloader with app image and skip image CRC fix:
 
 IMPORTANT: All shell scripts should be with Unix style EOL
 
-9. Setup onboard Pico 2 probes for SWD programming.
-9.1. Flash multiptobe FW through UF2 bootloader.
+10. Setup onboard Pico 2 probes for SWD programming.
+10.1. Flash multiptobe FW through UF2 bootloader.
 DFU mode be activated by pluggin the power while holding the button.
 After the flashing Composite USB device should present 10 CMSIS-DAP interfaces.
-9.2. Configure multiprobes in `openocd1.cfg` and `openocd2.cfg` with USB Serial numbers.
+10.2. Configure multiprobes in `openocd1.cfg` and `openocd2.cfg` with USB Serial numbers.
 Hint: Serials are logged on run.sh startup (in the order)
 	
-10. Setup Testing Dongle.
-10.1. Flash bootloader and Dongle FW (tag 0.0.1)
+11. Setup Testing Dongle.
+11.1. Flash bootloader and Dongle FW (tag 0.0.1)
 Add fake devices into paired list to prevent trackers under the test to autopair.
 via Serial commands:
 	add 000000000001
@@ -84,7 +93,7 @@ via Serial commands:
 	add 000000000008
 	add 000000000009
 	add 00000000000A
-10.2. Plug the Dongle into USB 2.0 port of RPi
+11.2. Plug the Dongle into USB 2.0 port of RPi
 	
 === Development and debugging ===
 

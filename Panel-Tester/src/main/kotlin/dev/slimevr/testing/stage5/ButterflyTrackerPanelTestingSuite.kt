@@ -31,7 +31,6 @@ typealias ChannelMode = dev.slimevr.hardware.SwitchboardStage5.Companion.Channel
 
 class ButterflyTrackerPanelTestingSuite(
     private val switchboard: SwitchboardStage5,
-    private val adc: ADCProvider,
     private val dbs: List<TestingDatabase>,
     private val ui: TesterButterflyTrackerUI,
     private val devices: Int,
@@ -85,7 +84,7 @@ class ButterflyTrackerPanelTestingSuite(
     private val EMPTY_ID_PREFIX = "00000000:"
 
     private val serialManager = SerialManager(ButterflyTrackerPortFilter(), sendReset = false)
-    private val dmesgWatcher = USBDmesgWatcher(this)
+    //private val dmesgWatcher = USBDmesgWatcher(this)
 
     private var dongle = DongleDeviceTest()
     private var hubLocationPrefix = "1-1.1" // Default location
@@ -234,15 +233,15 @@ class ButterflyTrackerPanelTestingSuite(
      * 1R shunt = 1V@1A with x100 gain => 100V@1A 1V=10mA
      */
     private fun getBatCurrent(): Float = 10f * getIoutVoltage()
-    private fun getIoutVoltage(): Float = adc.ADS1X15_1.getVoltage(0u)
-    private fun selectAdcGain(gain: UInt) = adc.ADS1X15_1.setPGA(gain)
-    private fun selectAdcRate(rate: UInt) = adc.ADS1X15_1.setDatarate(rate)
+    private fun getIoutVoltage(): Float = switchboard.ADS1X15_1.getVoltage(0u)
+    private fun selectAdcGain(gain: UInt) = switchboard.ADS1X15_1.setPGA(gain)
+    private fun selectAdcRate(rate: UInt) = switchboard.ADS1X15_1.setDatarate(rate)
     /** VBat target test-point */
-    private fun getBatVoltage(): Float = adc.ADS1X15_1.getVoltage(1u)
+    private fun getBatVoltage(): Float = switchboard.ADS1X15_1.getVoltage(1u)
     /** 3V targer test-point */
-    private fun getBusVoltage(): Float = adc.ADS1X15_1.getVoltage(2u)
+    private fun getBusVoltage(): Float = switchboard.ADS1X15_1.getVoltage(2u)
     /** VDD targer test-point */
-    private fun getOutVoltage(): Float = adc.ADS1X15_1.getVoltage(3u)
+    private fun getOutVoltage(): Float = switchboard.ADS1X15_1.getVoltage(3u)
 
     private fun selfTest() {
         logger.info("=== Testing suite self-test ===")

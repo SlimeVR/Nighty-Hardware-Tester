@@ -26,10 +26,20 @@ const val MCP23017_REG_OLAT = 0x0A // Output latch (RW)
 class MCP23017(
     val device: I2C
 ) {
-    private val bankMode: Int = 0
+    private var bankMode: Int = 0
+    private var portValue: Int = 0
 
     init {
         writeRegister(MCP23017_REG_IOCON, IOCON_MIRROR or IOCON_ODR)
+        portValue = 0
+    }
+
+    fun setDefault(ioMask: Int, portMask: Int) {
+        writeRegister(MCP23017_REG_IOCON, IOCON_MIRROR or IOCON_ODR)
+        // Write port values first (to avoid open drain / high push state)
+        // Then change I/O directions
+        writePort(portMask)
+        setDir(ioMask)
     }
 
     private fun getRegister(address: Int): I2CRegister = device.getRegister(2 * address)
@@ -75,12 +85,21 @@ class MCP23017(
     /**
      * 16-bit mask (0xBBAA)
      */
-    fun writePort(mask: Int) = writeRegister(MCP23017_REG_GPIO, mask)
+    fun writePort(mask: Int): Int {
+        portValue = mask // Cache for a quick lookup
+        writeRegister(MCP23017_REG_GPIO, mask)
+        return mask
+    }
 
     /**
      * Returns 16-bit mask (0xBBAA)
      */
-    fun readPort(): Int = readRegister(MCP23017_REG_GPIO)
+    fun readPort() = readRegister(MCP23017_REG_GPIO)
+
+    /**
+     * Quick lookup previous written port value
+     */
+    fun getPreviousWritePort() = portValue
 
     fun dumpAllRegs() {
         for(reg in 0..10) {

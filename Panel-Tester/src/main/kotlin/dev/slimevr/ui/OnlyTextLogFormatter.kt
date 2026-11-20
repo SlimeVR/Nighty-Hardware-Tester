@@ -14,6 +14,8 @@ class OnlyTextLogFormatter : Formatter() {
         when (record.level) {
             Level.SEVERE -> sb.append(SlimyLabel.COLOR_ERROR_PREFIX)
             Level.WARNING -> sb.append(SlimyLabel.COLOR_WARNING_PREFIX)
+            Level.INFO -> sb.append(SlimyLabel.COLOR_INFO_PREFIX)
+            Level.CONFIG -> sb.append(SlimyLabel.COLOR_CONFIG_PREFIX)
             else -> {}
         }
         sb.append(record.message)

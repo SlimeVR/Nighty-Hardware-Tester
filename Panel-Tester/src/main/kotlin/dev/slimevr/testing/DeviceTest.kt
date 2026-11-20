@@ -22,7 +22,8 @@ open class DeviceTest(
 ): SerialPortMessageListener {
 
     init {
-        logger.setLevel(Level.WARNING)
+        if(logger.name.equals("devices"))
+            logger.setLevel(Level.WARNING)
     }
 
     var deviceId = ""
