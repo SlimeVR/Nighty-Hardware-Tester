@@ -18,12 +18,13 @@ open class DeviceTest(
      * Device index in a panel (0-based).
      */
     var deviceNum: Int,
-    val logger: Logger = Logger.getLogger("devices")
+    val logger: Logger = Logger.getLogger("devices"),
 ): SerialPortMessageListener {
 
+    private val serialLogger: Logger = Logger.getLogger(logger.name + ".serial")
+
     init {
-        if(logger.name.equals("devices"))
-            logger.setLevel(Level.WARNING)
+        serialLogger.setLevel(Level.WARNING)
     }
 
     var deviceId = ""
@@ -43,6 +44,7 @@ open class DeviceTest(
      */
     var commitDevice = false
     var flashingRequired = true
+    var flushSerialIO = true
 
     fun addTestResult(result: TestResult) {
         testsList.add(result)
@@ -63,11 +65,12 @@ open class DeviceTest(
             try {
                 writer.append(command).append("\n")
                 writer.flush()
-                flushIOBuffers()
+                if(flushSerialIO)
+                    flushIOBuffers()
                 synchronized(serialLog) {
                     serialLog.add("-> $command")
                 }
-                logger.info("[${deviceNum+1}] Serial: -> $command")
+                serialLogger.info("[${deviceNum+1}] Serial: -> $command")
             } catch (e: Throwable) {
                 //e.printStackTrace()
                 logger.log(Level.SEVERE, "Serial port send error: ${e.message}", e)
@@ -91,16 +94,16 @@ open class DeviceTest(
                 serialLog.addAll(nonBlank)
             }
             for(line in nonBlank)
-                logger.info("[${deviceNum+1}] Serial: $line")
+                serialLogger.info("[${deviceNum+1}] Serial: $line")
         } else if (event.eventType == SerialPort.LISTENING_EVENT_PORT_DISCONNECTED) {
             synchronized(serialLog) {
                 if(serialDisconnected)
                     return
                 serialDisconnected = true // Mark as disconnected, it will be checked and erred by the test
             }
-            logger.info("[${deviceNum+1}] Serial disconnected")
+            serialLogger.info("[${deviceNum+1}] Serial disconnected")
         } else {
-            logger.info("[${deviceNum+1}] Serial event ${event!!.eventType}")
+            serialLogger.info("[${deviceNum+1}] Serial event ${event!!.eventType}")
         }
     }
 
