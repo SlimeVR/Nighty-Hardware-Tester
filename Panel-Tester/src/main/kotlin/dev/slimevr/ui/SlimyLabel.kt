@@ -213,8 +213,6 @@ class SlimyLabel : AbstractComponent<SlimyLabel> {
                             else -> DEFAULT_FOREGROUND_COLOR
                         }
                         line = line.substring(ESCAPE_PREFIX_SIZE)
-                    } else {
-                        graphics.foregroundColor = foregroundColor ?: DEFAULT_FOREGROUND_COLOR
                     }
                     val fitString = TerminalTextUtils.fitString(line, availableColumns)
                     graphics.putString(0, row - start, fitString)
