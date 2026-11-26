@@ -592,7 +592,7 @@ class ButterflyTrackerPanelTestingSuite(
         val successStrings = listOf("Verified OK").map(toRegEx).toTypedArray()
         val failStrings = listOf("unable to find a matching CMSIS-DAP device",
             "Error connecting DP", "Programming Failed", "Verify Failed", "Unable to reset target").map(toRegEx).toTypedArray()
-        val timeout = 60 * 1000L // 60s timeout
+        val flashTimeout = 60 * 1000L // 60s
         var deviceList = deviceTests.toMutableList()
 
         //val imageFile = File(if(eraseFlash) emptyFile else firmwareFile).path!!
@@ -625,7 +625,7 @@ class ButterflyTrackerPanelTestingSuite(
                         "Flash firmware",
                         successStrings, failStrings,
                         "sh flash.sh ${swd.config} $itf $imageFile $gdbPort",
-                        timeout,
+                        timeout = flashTimeout,
                         logFilter = openocdLogFilter
                     )
                     val flashResult = flashAction.action("", "", startTime)

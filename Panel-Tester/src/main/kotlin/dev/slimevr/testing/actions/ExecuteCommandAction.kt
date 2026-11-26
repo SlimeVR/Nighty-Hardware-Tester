@@ -22,7 +22,7 @@ class ExecuteCommandAction(
     successPatterns: Array<Regex>,
     failurePatterns: Array<Regex>,
     command: String,
-    private val timeout: Long,
+    private val timeout: Long = -1,
     directory: File? = null,
     private val logger: Logger? = null,
     private val logFilter: ((MutableList<String>) -> Unit)? = null

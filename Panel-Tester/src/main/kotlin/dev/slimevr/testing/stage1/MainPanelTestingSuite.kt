@@ -428,7 +428,7 @@ class MainPanelTestingSuite(
                         "/usr/bin/python3 /home/pi/.platformio/packages/tool-esptoolpy/esptool.py "
                             + "--before no_reset --after no_reset --chip esp8266 "
                             + "--port ${device.serialPort!!.systemPortPath} "
-                            + "--baud 3000000 write_flash -fm qio 0x0000 $firmwareFile", -1
+                            + "--baud 3000000 write_flash -fm qio 0x0000 $firmwareFile"
                     )
                     val flashResult = flashAction.action("", "", startTime)
                     addResult(device, flashResult)
@@ -465,7 +465,7 @@ class MainPanelTestingSuite(
                             arrayOf(".*MAC: .*".toRegex(RegexOption.IGNORE_CASE)),
                             emptyArray(),
                             "esptool --before no_reset --after no_reset --port ${device.serialPort!!.systemPortPath} read_mac",
-                            500
+                            timeout = 500
                         )
                         val macResult = macAction.action("", "", startTime)
                         if (retry != RETRIES && macResult.status == TestStatus.ERROR) {

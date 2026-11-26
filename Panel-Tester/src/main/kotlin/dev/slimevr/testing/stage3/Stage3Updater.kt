@@ -274,9 +274,9 @@ class Stage3Updater(
                     ".*Errno.*".toRegex(RegexOption.IGNORE_CASE),
                     ".*error.*".toRegex(RegexOption.IGNORE_CASE)
                 ),
-                "${System.getenv("UPDATER_PIO_PATH")} run -t upload --upload-port ${device.ipAddress}", -1
-                , File(System.getenv("UPDATER_FIRMWARE_PATH")),
-                deviceLoggers[device.deviceNum]
+                "${System.getenv("UPDATER_PIO_PATH")} run -t upload --upload-port ${device.ipAddress}",
+                directory = File(System.getenv("UPDATER_FIRMWARE_PATH")),
+                logger = deviceLoggers[device.deviceNum]
             )
             val flashResult = flashAction.action("", "", startTime)
             addResult(device, flashResult)
