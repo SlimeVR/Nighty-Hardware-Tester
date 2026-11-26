@@ -26,8 +26,8 @@ class TesterButterflyDongleUI (
     val testedDevicesUI: Array<TestingDeviceUI>
     val window = BasicWindow()
 
-    val firstRowText = "Controlling: FIRST row"
-    val secondRowText = "Controlling: SECOND row"
+    val firstRowText = "Controlling: LEFT side"
+    val secondRowText = "Controlling: RIGHT side"
     val secondRowLabel: Label
     var secondRow = false
 
@@ -36,6 +36,7 @@ class TesterButterflyDongleUI (
         // Setup terminal and screen layers
         val terminal: Terminal = DefaultTerminalFactory().createTerminal()
         val screen: Screen = TerminalScreen(terminal)
+
         screen.startScreen()
         // Create window to hold the panel
         window.theme = SimpleTheme(TextColor.ANSI.WHITE_BRIGHT, TextColor.ANSI.BLACK)
@@ -46,7 +47,12 @@ class TesterButterflyDongleUI (
 
         val gridSize = deviceLoggers.size / 2
         val mainPanel = Panel()
-        mainPanel.setLayoutManager(GridLayout(gridSize))
+        mainPanel.setLayoutManager(GridLayout(gridSize)
+            .apply{
+                horizontalSpacing = 0
+                leftMarginSize = 0
+                rightMarginSize = 0
+            })
 
         secondRowLabel = Label(firstRowText).setSize(TerminalSize.ONE)
         mainPanel.addComponent(
@@ -65,11 +71,15 @@ class TesterButterflyDongleUI (
             val statusColorPanel = EmptySpace(TestStatus.DISCONNECTED.color,
                 TerminalSize.ONE)
             val idLabel = Label("Board $i").setSize(TerminalSize.ONE)
-            testerPanel.setLayoutManager(GridLayout(1))
+            testerPanel.setLayoutManager(GridLayout(1)
+                .apply{
+                    leftMarginSize = 0
+                    rightMarginSize = 0
+                })
             testerPanel.addComponent(statusColorPanel, GridLayout.createHorizontallyFilledLayoutData())
-            testerPanel.addComponent(idLabel, GridLayout.createHorizontallyFilledLayoutData())
+            testerPanel.addComponent(idLabel, GridLayout.createHorizontallyEndAlignedLayoutData(1))
             val usbLabel = Label("").setSize(TerminalSize.ONE)
-            testerPanel.addComponent(usbLabel, GridLayout.createHorizontallyFilledLayoutData())
+            testerPanel.addComponent(usbLabel, GridLayout.createHorizontallyEndAlignedLayoutData(1))
 
             val logLabel = SlimyLabel("")
             val deviceLogHandler = LabelLogHandler(logLabel, 20)
@@ -106,7 +116,9 @@ class TesterButterflyDongleUI (
         window.component = mainPanel
         // Create gui and start gui
         Thread {
-            val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace(TextColor.ANSI.BLACK))
+            //val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace(TextColor.ANSI.BLACK))
+            val gui = MultiWindowTextGUI(SeparateTextGUIThread.Factory(), screen)
+            (gui.getGUIThread() as AsynchronousTextGUIThread).start()
             gui.addWindowAndWait(window)
             destroy()
         }.start()
@@ -130,9 +142,6 @@ class TesterButterflyDongleUI (
                             device = 9
                         else
                             device -= 1
-                        device *= 2
-                        if(secondRow)
-                            device += 1
                         suite.startTest(device)
                     }
                     lch == 'r' -> {
@@ -164,8 +173,13 @@ class TesterButterflyDongleUI (
         testedDevicesUI[device].idLabel.text = id
     }
 
+    fun setUSB(device: Int, usb: String) {
+        testedDevicesUI[device].usbLabel.text = usb
+    }
+
     fun clear(device: Int) {
         testedDevicesUI[device].idLabel.text = ""
+        testedDevicesUI[device].usbLabel.text = ""
         testedDevicesUI[device].statusColorPanel.color = TestStatus.DISCONNECTED.color
         testedDevicesUI[device].logLabel?.text = ""
         deviceLogHandlers[device].clear()
@@ -173,7 +187,7 @@ class TesterButterflyDongleUI (
     }
 
     fun clearAll() {
-        for (i in 1..deviceLoggers.size)
-            clear(i - 1)
+        for (i in deviceLoggers.indices)
+            clear(i)
     }
 }

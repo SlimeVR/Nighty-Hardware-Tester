@@ -70,7 +70,9 @@ class SwitchboardStage6(
     private var rstPin : DigitalOutput =
         DigitalOutput.newBuilder(pi4j).shutdown(DigitalState.HIGH).initial(DigitalState.HIGH).address(4).provider("pigpio-digital-output").build()
 
-    val ADC_SPI_BAUD = Spi.DEFAULT_BAUD
+    // ADC input has no filteing caps and sampling time is fixed by 1.5CLK time
+    // Lower the SPI clock to have longer sampling time through 47k/20pF
+    val ADC_SPI_BAUD = 100_000 // Spi.DEFAULT_BAUD
     val MCP3008_1: MCP3008 by lazy {
         MCP3008(spiProvider!!.create(SpiConfigBuilder.newInstance(pi4j).bus(1).channel(0).baud(ADC_SPI_BAUD).mode(SpiMode.MODE_0).build()))
     }
@@ -303,11 +305,11 @@ class SwitchboardStage6(
 
     fun mapDeviceToSwdDevice(num: Int): Int {
         require(num in 0..20)
-        // SWD1: #1..10
-        // SWD2: #11..20
+        // SWD2: #1..10
+        // SWD1: #11..20
         return when {
-            (num < 10) -> 0
-            (num < 20) -> 1
+            (num < 10) -> 1
+            (num < 20) -> 0
             else -> -1
         }
     }
