@@ -941,7 +941,7 @@ class ButterflyDonglePanelTestingSuite(
 
     private val pongResultSuccess = arrayOf("PONG packet received .*".toRegex())
     private val pongResultFail = arrayOf("Unknown command".toRegex())
-    private val PONG_RSSI_MIN = 35
+    private val PONG_RSSI_MIN = 38
 
     private fun checkDonglePing(device: DongleDeviceTest, retry: Int) {
         retryPing@ for(i in 1..PING_RETRIES) {
