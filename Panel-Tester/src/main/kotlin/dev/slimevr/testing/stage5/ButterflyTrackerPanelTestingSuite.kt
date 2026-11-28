@@ -363,14 +363,17 @@ class ButterflyTrackerPanelTestingSuite(
                     //logger.warning(log)
                     val buildDate = matchLog("Build: ([ 0-9:-]+)")?.get(1)
                         ?: throw UnexpectedException("Can't parse Dongle build date")
-                    val buildHash = matchLog("Commit: ([a-zA-Z0-9]+)")?.get(1)
+                    val buildHash = matchLog("Commit: ([a-zA-Z0-9-.]+)")?.get(1)
                         ?: throw UnexpectedException("Can't parse Dongle build hash")
-                    logger.info("Dongle firmware: $buildDate ($buildHash)")
-                    dongle.deviceId = matchLog("Device address: ([a-zA-Z0-9:]+)")?.get(1)?.uppercase()
+                    val dongleId = matchLog("Device address: ([a-zA-Z0-9:]+)")?.get(1)?.uppercase()
                         ?: throw UnexpectedException("Can't parse Dongle addresss")
-                    dongle.channel = matchLog("Channel frequency: ([0-9]+)")?.get(1)?.toInt()
+                    val dongleFeq = matchLog("Channel frequency: ([0-9]+)")?.get(1)?.toInt()
                         ?: throw UnexpectedException("Can't parse Dongle channel")
-                    logger.config("Dongle address: ${dongle.deviceId}, channel: ${dongle.channel}")
+                    val dongleCh = dongleFeq - 2400
+                    dongle.deviceId = dongleId
+                    dongle.channel = dongleCh
+                    logger.info("Dongle firmware: $buildHash ($buildDate)")
+                    logger.config("Dongle address: $dongleId, channel: $dongleCh")
                 }
             }
         } else {
@@ -820,6 +823,7 @@ class ButterflyTrackerPanelTestingSuite(
         if (!hasUnfailedDevicesOnChannel())
             return
 
+        // TODO When retry, already tested devices may be skipped (same implementation as for Dongle testing)
         statusLogger.info("Testing devices...")
         for (device in deviceTests) {
             if (switchboard.deviceNumToChannel(device.deviceNum) != switchboard.channel())
@@ -942,10 +946,9 @@ class ButterflyTrackerPanelTestingSuite(
     private val PONG_RSSI_MIN = 50
 
     private fun checkDonglePing(device: DeviceTest, retry: Int) {
-        val radioChannel = dongle.channel - 2400
         retryPing@ for(i in 1..PING_RETRIES) {
             val startTime = System.currentTimeMillis()
-            if (device.sendSerialCommand("ping ${dongle.deviceId} $radioChannel")) {
+            if (device.sendSerialCommand("ping ${dongle.deviceId} ${dongle.channel}")) {
                 val waitPongResult = SerialMatchingAction("Ping dongle", pongResultSuccess, pongResultFail, device, 500)
                 val pongResult = waitPongResult.action("", "", startTime)
                 if(device.serialDisconnected) {

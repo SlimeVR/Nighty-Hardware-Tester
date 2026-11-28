@@ -40,7 +40,7 @@ class ButterflyDonglePanelTestingSuite(
     private val serialEnumTimeMS = 2000L
     private val serialEnumTimeoutMS = 5000L
     private val serialOpenTimeMS = 500L
-    private val flashTimeoutMS = 60 * 1000L // 60s
+    private val flashTimeoutMS = 60 * 1000L
     private val FLASH_RETRIES = 2
     private val SERIAL_RETRIES = 3
     private val PING_RETRIES = 5
@@ -48,13 +48,13 @@ class ButterflyDonglePanelTestingSuite(
     private val devices = 20
     private val SELF_TEST_ASSERT = true
     private val FLASH_DEVICES = true
-    private val SUBMIT_RESULTS = false
-    private val RETEST_RETRY = true // XXX
+    private val SUBMIT_RESULTS = true
+    private val RETEST_RETRY = true
 
     private val actionEmptyBusFrom3V = VoltageTestAction("Reference 3V3", 3.25f, 3.35f) // 3v3
     private val actionEmptyBusFrom5V = VoltageTestAction("Empty USB power", 0f, 0.1f) // 0v
 
-    private val actionBusFrom3V = VoltageTestAction("3V3 power", 2.45f, 3.35f) // 3v3 may have some drop due to current limiting resistor
+    private val actionBusFrom3V = VoltageTestAction("3V3 power", 2.4f, 3.35f) // 3v3 may have some drop due to current limiting resistor
     private val actionPowerGood = SuccessAction("PG status")
     private val actionBusFrom5Vdefault = VoltageTestAction("USB power", 1.7f, 1.9f) // Default 1.8v for pre-flashed
     private val actionBusFrom5Vnormal = VoltageTestAction("USB power", 3.2f, 3.4f) // 3v3 for configured LDO
@@ -80,7 +80,7 @@ class ButterflyDonglePanelTestingSuite(
     private val actionRadioPong = SuccessAction("Radio")
 
     private var dongle = DongleDeviceTest()
-    private val deviceTests = mutableListOf<DeviceTest>()
+    private val deviceTests = mutableListOf<DongleDeviceTest>()
     private val committedList = TestedDevicesLocalCache("testedList.txt", logger, logger)
     private var testStart = 0L
     private var isTesting = false
@@ -211,7 +211,6 @@ class ButterflyDonglePanelTestingSuite(
     private fun selfTest() {
         logger.info("=== Self-test ===")
 
-        //board.power(14, SwitchboardStage6.GpioPinMode.USB, true)
         board.swd(true)
         sleep(serialEnumTimeMS)
 
@@ -233,42 +232,70 @@ class ButterflyDonglePanelTestingSuite(
     val infoResultFail = arrayOf("Unknown command".toRegex())
 
     private fun searchForSelfUsbDevices() {
-        if (!lookupSelfUsbDevices() && SELF_TEST_ASSERT) {
+        if (!lookupSelfUsbDevices() && SELF_TEST_ASSERT)
             throw UnexpectedException("Tester USB devices enumeration failed")
-        }
         if(dongle.serialPort == null)
             return
-        if (serialManager.openPort(dongle.serialPort!!, dongle)) {
-            sleep(10)
-            val startTime = System.currentTimeMillis()
-            if (!dongle.sendSerialCommand("info")) {
-                serialManager.closePort(dongle.serialPort!!)
-                throw UnexpectedException("USB communication with Dongle failed")
-            } else {
-                // Wait for the command output and disconnect
-                val getInfoResult = SerialMatchingAction("Read address", infoResultSuccess, infoResultFail, dongle, 500)
-                // Address and channel lookup
-                with(getInfoResult.action("", "", startTime)) {
-                    serialManager.closePort(dongle.serialPort!!)
-                    if (status == TestStatus.ERROR)
-                        throw UnexpectedException("USB communication with Dongle error")
-                    //logger.warning(log)
-                    val buildDate = matchLog("Build: ([ 0-9:-]+)")?.get(1)
-                        ?: throw UnexpectedException("Can't parse Dongle build date")
-                    val buildHash = matchLog("Commit: ([a-zA-Z0-9]+)")?.get(1)
-                        ?: throw UnexpectedException("Can't parse Dongle build hash")
-                    logger.info("Dongle firmware: $buildDate ($buildHash)")
-                    dongle.deviceId = matchLog("Device address: ([a-zA-Z0-9:]+)")?.get(1)?.uppercase()
-                        ?: throw UnexpectedException("Can't parse Dongle addresss")
-                    dongle.channel = matchLog("Channel frequency: ([0-9]+)")?.get(1)?.toInt()
-                        ?: throw UnexpectedException("Can't parse Dongle channel")
-                    logger.config("Dongle address: ${dongle.deviceId}, channel: ${dongle.channel}")
-                }
+        dongle.flushSerialIO = false // Prevent Rpi3 freeze
+        waitForDongleScan = true
+        val startTime = System.currentTimeMillis()
+        retrySerial@ for(retry in 1..SERIAL_RETRIES) {
+            if(retry > 1) {
+                logger.warning("Retry...${retry - 1}")
             }
-        } else {
-            serialManager.closePort(dongle.serialPort!!)
-            // TODO: Implement retry
-            throw UnexpectedException("USB connection with Dongle failed")
+            if (serialManager.openPort(dongle.serialPort!!, dongle)) {
+                sleep(10)
+                if(waitForDongleScan) {
+                    waitDongleScanFinish(dongle)
+                    waitForDongleScan = false
+                }
+                if (dongle.sendSerialCommand("info    ")) {
+                    // Wait for the command output and disconnect
+                    val getInfoResult = SerialMatchingAction("Read address", infoResultSuccess, infoResultFail, dongle, 1000)
+                    // Address and channel lookup
+                    val info = getInfoResult.action("", "", startTime)
+                    serialManager.closePort(dongle.serialPort!!)
+                    //logger.warning(info.log)
+                    if (info.status == TestStatus.PASS) {
+                        val buildDate = info.matchLog("Build: ([ 0-9:-]+)")?.get(1)
+                            ?: throw UnexpectedException("Can't parse Dongle build date")
+                        val buildHash = info.matchLog("Commit: ([a-zA-Z0-9-.]+)")?.get(1)
+                            ?: throw UnexpectedException("Can't parse Dongle build hash")
+                        val dongleId = info.matchLog("Device address: ([a-zA-Z0-9:]+)")?.get(1)?.uppercase()
+                            ?: throw UnexpectedException("Can't parse Dongle addresss")
+                        val dongleFeq = info.matchLog("Channel frequency: ([0-9]+)")?.get(1)?.toInt()
+                            ?: throw UnexpectedException("Can't parse Dongle channel")
+                        val dongleCh = dongleFeq - 2400
+                        if(dongleCh == DongleDeviceTest.DONGLE_ADV_CHANNEL) {
+                            logger.warning("Dongle still scanning channels.")
+                            // Force to wait channel scan finish
+                            waitForDongleScan = true
+                            continue@retrySerial
+                        }
+                        dongle.deviceId = dongleId
+                        dongle.channel = dongleCh
+                        logger.info("Dongle firmware: $buildHash ($buildDate)")
+                        logger.config("Dongle address: $dongleId, channel: $dongleCh")
+                        return
+                    } else {
+                        if(retry < SERIAL_RETRIES) {
+                            logger.warning("Dongle info error: ${info.endValue}")
+                            continue@retrySerial
+                        }
+                        throw UnexpectedException("Dongle communication error: Serial read")
+                    }
+                } else {
+                    serialManager.closePort(dongle.serialPort!!)
+                    if(retry < SERIAL_RETRIES)
+                        continue@retrySerial
+                    throw UnexpectedException("Dongle communication error: Serial write")
+                }
+            } else {
+                serialManager.closePort(dongle.serialPort!!)
+                if(retry < SERIAL_RETRIES)
+                    continue@retrySerial
+                throw UnexpectedException("Dongle communication error: Can't open port")
+            }
         }
     }
 
@@ -302,7 +329,7 @@ class ButterflyDonglePanelTestingSuite(
             }
         }
         var probesOk: Boolean = (probeSerials.count{ s -> s.contentEquals("unknown") } == 0)
-        probesOk = probesOk or (probeSerials.count{ s -> s.contentEquals("unknown") } == 1) // XXX Continue with single SWD
+        //probesOk = probesOk or (probeSerials.count{ s -> s.contentEquals("unknown") } == 1) // Continue with single SWD
         val dongleOk = (dongle.serialPort != null)
         logger.log(
             if (probesOk && dongleOk) Level.CONFIG else Level.SEVERE,
@@ -383,7 +410,7 @@ class ButterflyDonglePanelTestingSuite(
                 ui.setID(it, "")
                 if (deviceTests.isEmpty()) {
                     for (i in 0 until devices) {
-                        val device = DeviceTest(i)
+                        val device = DongleDeviceTest(i, deviceLoggers[i])
                         deviceTests.add(device)
                     }
                 }
@@ -391,6 +418,9 @@ class ButterflyDonglePanelTestingSuite(
                 //deviceTests[it] = DeviceTest(it)
                 deviceTests[it].testStatus = TestStatus.TESTING
                 deviceTests[it].deviceId = ""
+                deviceTests[it].powerTestRequired = true // Retest power
+                deviceTests[it].radioTestRequired = true // Retest radio
+                deviceTests[it].bestRssi = DongleDeviceTest.RSSI_INVALID
                 //ui.clear(it)
                 testStart = System.currentTimeMillis()
             }
@@ -401,7 +431,7 @@ class ButterflyDonglePanelTestingSuite(
         ui.clearAll()
         deviceTests.clear()
         for (i in 0 until devices) {
-            val device = DeviceTest(i, deviceLoggers[i])
+            val device = DongleDeviceTest(i, deviceLoggers[i])
             deviceTests.add(device)
         }
         if(!testEraseFlash) {
@@ -442,7 +472,11 @@ class ButterflyDonglePanelTestingSuite(
         for (device in deviceTests) {
             if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
                 continue
-            device.logger.info("[${device.deviceNum + 1}] Power")
+            if(!device.powerTestRequired) {
+                device.logger.info("[${device.deviceNum + 1}] Power already tested")
+                continue
+            }
+            device.logger.info("[${device.deviceNum + 1}] -=Power=-")
             board.power(device.deviceNum, SwitchboardStage6.GpioPinMode.V3V3, true)
             showStatus(device, TestStatus.NOT_UPDATED)
             sleep(10) // Minimize surge current
@@ -450,18 +484,24 @@ class ButterflyDonglePanelTestingSuite(
         sleep(powerBalanceTimeMS)
 
         for (device in deviceTests) {
-            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
+            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device) || !device.powerTestRequired)
                 continue
             val vbus = board.readADC(device.deviceNum)
             val vBusResult = actionBusFrom3V.action(vbus, "", System.currentTimeMillis())
             addResult(device, vBusResult)
+
+            if(vbus < 0.001f) {
+                ui.setUSB(device.deviceNum, "BUS SHORT")
+                //device.testStatus = TestStatus.DISCONNECTED
+                //ui.setStatus(device.deviceNum, device.testStatus)
+            }
 
             board.power(device.deviceNum, SwitchboardStage6.GpioPinMode.V3V3, false)
         }
 
         // Test USB 5V
         for (device in deviceTests) {
-            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
+            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device) || !device.powerTestRequired)
                 continue
             board.power(device.deviceNum, SwitchboardStage6.GpioPinMode.USB, true)
             showStatus(device, TestStatus.NOT_UPDATED)
@@ -470,7 +510,7 @@ class ButterflyDonglePanelTestingSuite(
         sleep(powerBalanceTimeMS)
 
         for (device in deviceTests) {
-            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
+            if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device) || !device.powerTestRequired)
                 continue
 
             // Detect over-current event
@@ -489,6 +529,12 @@ class ButterflyDonglePanelTestingSuite(
             powerFlagResult.setOkOnPass()
             addResult(device, vBusResult)
             addResult(device, powerFlagResult)
+
+            if(vbus < 0.001f) {
+                ui.setUSB(device.deviceNum, "EMPTY")
+                //device.testStatus = TestStatus.DISCONNECTED
+                //ui.setStatus(device.deviceNum, device.testStatus)
+            }
 
             board.power(device.deviceNum, SwitchboardStage6.GpioPinMode.USB, false)
         }
@@ -557,6 +603,7 @@ class ButterflyDonglePanelTestingSuite(
                 LogManager.global.info("[${device.deviceNum + 1}] Skipping already flashed device")
                 continue
             } else {
+                device.logger.info("[${device.deviceNum + 1}] -=Flashing=-")
                 val swdIdx = board.mapDeviceToSwdDevice(device.deviceNum)
                 if(swdIdx == -1)
                     throw ArrayIndexOutOfBoundsException()
@@ -566,7 +613,6 @@ class ButterflyDonglePanelTestingSuite(
                     throw ArrayIndexOutOfBoundsException()
                 val gdbPort = 3333 + device.deviceNum * 2
                 val task: () -> TestStatus = {
-                    device.logger.info("[${device.deviceNum + 1}] Flashing")
                     showStatus(device, TestStatus.NOT_UPDATED)
                     device.testStatus = TestStatus.TESTING
                     val startTime = System.currentTimeMillis()
@@ -633,6 +679,9 @@ class ButterflyDonglePanelTestingSuite(
         for (device in deviceTests) {
             if (shouldSkipDevice(device.deviceNum) || !isDeviceInTesting(device))
                 continue
+            if(!device.powerTestRequired) {
+                device.logger.info("[${device.deviceNum + 1}] Power already tested")
+            }
 
             // Detect over-current event
             val powerFailure = board.is5vFaultAsserted(device.deviceNum)
@@ -648,17 +697,23 @@ class ButterflyDonglePanelTestingSuite(
             addResult(device, vBusResult)
             addResult(device, powerFlagResult)
 
+            device.powerTestRequired = powerFailure || vBusResult.status != TestStatus.PASS
+
             if(device.testStatus == TestStatus.ERROR) {
                 board.power(device.deviceNum, SwitchboardStage6.GpioPinMode.USB, false)
             } else {
                 // Keep USB power
+                device.powerTestRequired = false // Do not retest power
             }
         }
     }
 
+    private var waitForDongleScan = true
+
     fun enumerateAndTestDevices() {
         for(i in 1..SERIAL_RETRIES) {
             if(i > 1) {
+                logger.warning("Retry...${i - 1}")
                 // Power cycle
                 board.disableGPIO()
                 sleep(powerBalanceTimeMS)
@@ -673,6 +728,7 @@ class ButterflyDonglePanelTestingSuite(
                 }
                 sleep(powerBalanceTimeMS)
             }
+            waitForDongleScan = true
             if (!enumerateSerialDevices(i))
                 break
             if (!hasUnfailedDevicesOnChannel())
@@ -688,11 +744,15 @@ class ButterflyDonglePanelTestingSuite(
                     }
                     continue
                 }
+                if(!device.radioTestRequired) {
+                    logger.info("[${device.deviceNum + 1}] Device already tested")
+                    continue
+                }
                 testDevice(device, device.serialPort!!, i)
             }
             clearSerial()
         }
-        //board.disableGPIO() // XXX
+        board.disableGPIO()
     }
 
     private fun enumerateSerialDevices(retry: Int): Boolean {
@@ -769,24 +829,30 @@ class ButterflyDonglePanelTestingSuite(
         return true
     }
 
-    fun testDevice(device: DeviceTest, port: SerialPort, retry: Int) {
+    fun testDevice(device: DongleDeviceTest, port: SerialPort, retry: Int) {
         //device.logger.info("[${device.deviceNum + 1}] Access ${port.systemPortName}")
         showStatus(device, TestStatus.NOT_UPDATED)
+        device.flushSerialIO = false // Prevent Rpi3 freeze
         val startTime = System.currentTimeMillis()
         if(serialManager.openPort(port, device)) {
             //device.logger.info("[${device.deviceNum + 1}] Port opened")
             sleep(serialOpenTimeMS)
 
-            device.flushSerialIO = false // Prevent Rpi3 freeze
-
+            // For now dongle can't ping before finished with channels scanning
+            // We need to be sure each dongle finished the scan, otherwise we will spend all retries on short timeouts instead real pings
+            waitForDongleScan = true // Force to wait channel scan first
+            if(waitForDongleScan) {
+                //logger.info("[${device.deviceNum + 1}] Wating dongle to finish scan")
+                waitDongleScanFinish(device)
+                waitForDongleScan = false
+            }
             //device.logger.info("[${device.deviceNum + 1}] Sending info command...")
-            if (device.sendSerialCommand("info")) {
+            if (device.sendSerialCommand("info    ")) {
                 getDeviceInfo(device, retry)
 
                 if(device.serialDisconnected) {
+                    serialManager.closePort(port)
                     if(retry < SERIAL_RETRIES) {
-                        serialManager.closePort(port)
-                        device.logger.warning("Retry...$retry")
                         LogManager.global.warning("[${device.deviceNum + 1}] Port disconnected. Retry...$retry")
                         device.testStatus = TestStatus.TESTING
                         showStatus(device, TestStatus.PORT_ERROR)
@@ -800,7 +866,6 @@ class ButterflyDonglePanelTestingSuite(
                 // means port is not operable and we need to reopen it again
                 serialManager.closePort(port)
                 if(retry < SERIAL_RETRIES) {
-                    device.logger.warning("Retry...$retry")
                     LogManager.global.warning("[${device.deviceNum + 1}] Can't send serial command. Retry...$retry")
                     device.testStatus = TestStatus.TESTING
                     showStatus(device, TestStatus.PORT_ERROR)
@@ -812,7 +877,6 @@ class ButterflyDonglePanelTestingSuite(
         } else {
             serialManager.closePort(port)
             if(retry < SERIAL_RETRIES) {
-                device.logger.warning("Retry...$retry")
                 LogManager.global.warning("[${device.deviceNum + 1}] Can't open port. Retry...$retry")
                 device.testStatus = TestStatus.TESTING
                 showStatus(device, TestStatus.PORT_ERROR)
@@ -823,9 +887,24 @@ class ButterflyDonglePanelTestingSuite(
         }
     }
 
-    fun getDeviceInfo(device: DeviceTest, retry: Int) {
-        device.logger.info("[${device.deviceNum + 1}] Testing")
-        // Wait for the command output and disconnect
+    val waitScanResultSuccess = arrayOf("Found an empty channel .*".toRegex()) // Scan mode finished
+    val waitScanResultFail = arrayOf("Initialized ESB, TX mode ch .*".toRegex()) // Normal mode
+
+    fun waitDongleScanFinish(device: DongleDeviceTest): Boolean {
+        val scanAction = SerialMatchingAction("Channels Scan", waitScanResultSuccess, waitScanResultFail, device, 30_000)
+        val scanResult = scanAction.action("", "", System.currentTimeMillis())
+        //logger.warning("Waiting of channel scan finished: ${scanResult.endValue}")
+        //LogManager.global.warning(scanResult.log)
+        if(scanResult.endValue.lowercase().startsWith("timeout")) {
+            //logger.warning("Failed wating for channel scan finish by timeout")
+            return false
+        }
+        return (scanResult.status == TestStatus.PASS)
+    }
+
+    fun getDeviceInfo(device: DongleDeviceTest, retry: Int) {
+        device.logger.info("[${device.deviceNum + 1}] -=Testing=-")
+        // Wait for the command output
         val getInfoResult = SerialMatchingAction("Device info", infoResultSuccess, infoResultFail, device, 2000) // TODO: Minimize logs (trim lines before the command)
         val startTime = System.currentTimeMillis()
         val infoResult = getInfoResult.action("", "", startTime)
@@ -851,7 +930,7 @@ class ButterflyDonglePanelTestingSuite(
             checkDonglePing(device, retry)
         } else {
             if(retry < SERIAL_RETRIES) {
-                device.logger.warning("Retry...$retry")
+                LogManager.global.warning(infoResult.log)
                 LogManager.global.warning("[${device.deviceNum + 1}] Serial response failed. Retry...$retry")
                 device.testStatus = TestStatus.TESTING
                 showStatus(device, TestStatus.PORT_ERROR)
@@ -862,56 +941,89 @@ class ButterflyDonglePanelTestingSuite(
 
     private val pongResultSuccess = arrayOf("PONG packet received .*".toRegex())
     private val pongResultFail = arrayOf("Unknown command".toRegex())
-    private val PONG_RSSI_MIN = 30
+    private val PONG_RSSI_MIN = 35
 
-    private fun checkDonglePing(device: DeviceTest, retry: Int) {
-        val radioChannel = dongle.channel - 2400
+    private fun checkDonglePing(device: DongleDeviceTest, retry: Int) {
         retryPing@ for(i in 1..PING_RETRIES) {
+            // if(i > 1) {
+            //     device.logger.warning("Retry ping...${i - 1}")
+            // }
             val startTime = System.currentTimeMillis()
-            if (device.sendSerialCommand("ping ${dongle.deviceId} $radioChannel")) {
-                // Dongle scanning channels on startup, PING task is delayed
-                val waitPongResult = SerialMatchingAction("Ping", pongResultSuccess, pongResultFail, device, 15000)
+            if (device.sendSerialCommand("ping ${dongle.deviceId} ${dongle.channel}    ")) {
+                val waitPongResult = SerialMatchingAction("Ping", pongResultSuccess, pongResultFail, device, 1000)
                 val pongResult = waitPongResult.action("", "", startTime)
                 if(device.serialDisconnected) {
                     if(retry < SERIAL_RETRIES) {
-                        showStatus(device, TestStatus.PORT_ERROR)
                         device.deviceId = "" // Force to enumerate
+                        showStatus(device, TestStatus.PORT_ERROR)
                         return // to external retry loop
                     }
                     addResult(device, pongResult)
                 }
                 if(pongResult.endValue.lowercase().startsWith("timeout")) {
+                    //LogManager.global.warning(pongResult.log)
                     // Dongle can miss ping packet, so it is OK to retry again
                     if(i < PING_RETRIES) {
-                        //device.logger.warning("Retry...$retry")
-                        //LogManager.global.warning("[${device.deviceNum + 1}] No pong response. Retry...$i")
+                        LogManager.global.warning("[${device.deviceNum + 1}] Pong response timeout. Retry...$i")
                         showStatus(device, TestStatus.PORT_ERROR)
                         continue@retryPing
                     }
+                    // if(retry < SERIAL_RETRIES) {
+                    //     LogManager.global.warning("[${device.deviceNum + 1}] Pong response timeout. Retry serial...$retry")
+                    //     device.deviceId = "" // Force to enumerate
+                    //     device.testStatus = TestStatus.TESTING // Retry again
+                    //     showStatus(device, TestStatus.PORT_ERROR)
+                    //     return
+                    // }
                     addResult(device, pongResult)
                 }
                 pongResult.setOkOnPass()
                 if(pongResult.status == TestStatus.PASS) {
                     val match = pongResult.matchLog("PONG packet received from ([a-zA-Z0-9:]+), RSSI ([0-9]+)")
                     val pongAddress = match?.get(1) ?: ""
-                    val pongRssi = match?.get(2)?.toInt() ?: 255
-                    val pongOk = pongAddress.contentEquals(device.deviceId) && (pongRssi < PONG_RSSI_MIN)
+                    val pongRssi = match?.get(2)?.toInt() ?: DongleDeviceTest.RSSI_INVALID
+                    val isPongFromDongle = pongAddress.contentEquals(device.deviceId)
+                    if(isPongFromDongle && pongRssi < device.bestRssi)
+                        device.bestRssi = pongRssi
+                    val pongOk = isPongFromDongle && (pongRssi < PONG_RSSI_MIN)
                     val result = actionRadioPong.action(pongOk, match?.get(0) ?: "No pong packet", startTime)
-                    result.endValue = if(match != null) "RSSI $pongRssi" else "No pong packet"
+                    result.endValue = if(match != null) "RSSI ${device.bestRssi}" else "No pong packet"
                     // Address mismatch may be due to requests collision
                     // Low RSSI may be due to radio interference
                     // Both is OK, just retry again
                     if(result.status == TestStatus.ERROR) {
                         if(i < PING_RETRIES) {
-                            //device.logger.warning("Retry...$retry")
-                            //LogManager.global.warning("[${device.deviceNum + 1}] Failed pong response. Retry...$i")
+                            LogManager.global.warning("[${device.deviceNum + 1}] Failed radio test. Retry...$i")
                             showStatus(device, TestStatus.ERROR)
                             continue@retryPing
                         }
+                        // if(retry < SERIAL_RETRIES) {
+                        //     LogManager.global.warning("[${device.deviceNum + 1}] Failed radio test. Retry serial...$retry")
+                        //     device.deviceId = "" // Force to enumerate
+                        //     device.testStatus = TestStatus.TESTING // Retry again
+                        //     showStatus(device, TestStatus.PORT_ERROR)
+                        //     return
+                        // }
                     }
+                    if(pongOk)
+                        device.radioTestRequired = false
+
                     addResult(device, pongResult)
                     addResult(device, result)
                 } else {
+                    if(i < PING_RETRIES) {
+                        LogManager.global.warning("[${device.deviceNum + 1}] Pong response error. Retry...$i")
+                        showStatus(device, TestStatus.ERROR)
+                        continue@retryPing
+                    }
+                    // if(retry < SERIAL_RETRIES) {
+                    //     LogManager.global.warning("[${device.deviceNum + 1}] Pong response error. Retry serial...$retry")
+                    //     device.deviceId = "" // Force to enumerate
+                    //     device.testStatus = TestStatus.TESTING // Retry again
+                    //     showStatus(device, TestStatus.PORT_ERROR)
+                    //     return
+                    // }
+                    //LogManager.global.warning(pongResult.log)
                     addResult(device, pongResult)
                 }
                 break@retryPing
@@ -928,7 +1040,6 @@ class ButterflyDonglePanelTestingSuite(
                     }
                 }
                 if(retry < SERIAL_RETRIES) {
-                    device.logger.warning("Retry...$retry")
                     LogManager.global.warning("[${device.deviceNum + 1}] Can't send serial command. Retry...$retry")
                     device.deviceId = "" // Force to enumerate
                     device.testStatus = TestStatus.TESTING
@@ -987,7 +1098,7 @@ class ButterflyDonglePanelTestingSuite(
     }
 
     private fun showTestErrors() {
-        LogManager.global.info("== Test results ===")
+        LogManager.global.info("=== Test results ===")
         for (device in deviceTests) {
             if (shouldSkipDevice(device.deviceNum))
                 continue
@@ -1029,17 +1140,17 @@ class ButterflyDonglePanelTestingSuite(
                 continue
             val msgPrefix = "[${device.deviceNum + 1}]"
             if (device.deviceId.isBlank()) {
-                deviceLoggers[device.deviceNum].info("$msgPrefix Skipping, no ID")
+                logger.info("$msgPrefix Skipping, no ID")
                 continue
             }
             if(committedList.has(device.deviceId)) {
-                deviceLoggers[device.deviceNum].info("$msgPrefix Skipping, recently committed as ${device.deviceId}")
+                logger.info("$msgPrefix Skipping, recently committed as ${device.deviceId}")
                 ui.setStatus(device.deviceNum, TestStatus.RETESTED)
                 continue
             }
             for (db in dbs) {
                 val response = db.sendTestData(device)
-                deviceLoggers[device.deviceNum].config("$msgPrefix ${device.deviceId}: $response")
+                logger.config("$msgPrefix ${device.deviceId}: $response")
             }
             if (device.deviceId.startsWith(EMPTY_ID_PREFIX))
                 continue // Do not cache

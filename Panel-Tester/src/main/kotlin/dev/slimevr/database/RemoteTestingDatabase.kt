@@ -2,6 +2,7 @@ package dev.slimevr.database
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
+import dev.slimevr.logger.LogManager
 import dev.slimevr.testing.DeviceTest
 import dev.slimevr.testing.TestStatus
 import java.net.URI
@@ -11,6 +12,7 @@ import java.net.http.HttpRequest.BodyPublishers
 import java.net.http.HttpResponse
 import java.net.http.HttpResponse.BodyHandlers
 import java.net.http.HttpTimeoutException
+import java.net.SocketException
 import java.time.Duration
 import java.time.Instant
 import java.util.logging.Logger
@@ -43,9 +45,17 @@ class RemoteTestingDatabase(
             try {
                 response = httpClient.send(request, BodyHandlers.ofString())
                 break
-            } catch(ex: HttpTimeoutException) {
+            } catch(ex: SocketException) {
                 if(i < HTTP_RETRIES) {
                     globalLogger.warning("HTTP Timeout: ${ex.message}. Retry... $i")
+                    LogManager.global.info("JSON:\n${json}")
+                    continue
+                }
+            } catch(ex: Exception) {
+                val exList = arrayOf(HttpTimeoutException::class, SocketException::class)
+                if(i < HTTP_RETRIES && (ex::class in exList)) {
+                    globalLogger.warning("HTTP Timeout: ${ex.message}. Retry... $i")
+                    LogManager.global.info("JSON:\n${json}")
                     continue
                 }
                 throw ex

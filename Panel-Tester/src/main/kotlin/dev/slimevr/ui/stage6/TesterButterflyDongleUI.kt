@@ -40,7 +40,7 @@ class TesterButterflyDongleUI (
         screen.startScreen()
         // Create window to hold the panel
         window.theme = SimpleTheme(TextColor.ANSI.WHITE_BRIGHT, TextColor.ANSI.BLACK)
-        window.setHints(listOf(Window.Hint.FULL_SCREEN, Window.Hint.FIT_TERMINAL_WINDOW))
+        window.setHints(listOf(Window.Hint.FULL_SCREEN, Window.Hint.FIT_TERMINAL_WINDOW, Window.Hint.NO_DECORATIONS))
         window.setCloseWindowWithEscape(true)
 
         // Create panel to hold components
@@ -86,7 +86,7 @@ class TesterButterflyDongleUI (
             deviceLogHandler.formatter = OnlyTextLogFormatter()
             deviceLoggers[i - 1].addHandler(deviceLogHandler)
             //deviceLoggers[i - 1].useParentHandlers = false
-            logLabel.setSize(TerminalSize(20, 20))
+            logLabel.setSize(TerminalSize(20, 21))
 
             testerPanel.addComponent(logLabel,
                 GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER, true, true, 1, 1)
@@ -116,9 +116,9 @@ class TesterButterflyDongleUI (
         window.component = mainPanel
         // Create gui and start gui
         Thread {
-            //val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace(TextColor.ANSI.BLACK))
-            val gui = MultiWindowTextGUI(SeparateTextGUIThread.Factory(), screen)
-            (gui.getGUIThread() as AsynchronousTextGUIThread).start()
+            val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace(TextColor.ANSI.BLACK))
+            //val gui = MultiWindowTextGUI(SeparateTextGUIThread.Factory(), screen)
+            //(gui.getGUIThread() as AsynchronousTextGUIThread).start()
             gui.addWindowAndWait(window)
             destroy()
         }.start()
@@ -142,6 +142,8 @@ class TesterButterflyDongleUI (
                             device = 9
                         else
                             device -= 1
+                        if(secondRow)
+                            device += 10
                         suite.startTest(device)
                     }
                     lch == 'r' -> {
